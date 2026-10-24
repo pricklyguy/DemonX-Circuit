@@ -63,6 +63,7 @@ function localExecutable(name, candidates = []) {
 }
 function exists(file) { try { require('node:fs').accessSync(file); return true; } catch { return false; } }
 function installationCandidates() {
+  if (acceptanceRoot && process.env.DEMONX_CIRCUIT_ACCEPTANCE_NO_NATIVE_TOOLS === '1') return [];
   if (process.platform === 'win32') return [
     path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0'),
     process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], 'KiCad', '10.0'),

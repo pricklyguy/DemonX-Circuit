@@ -118,6 +118,7 @@ async function launch({ noNativeTools = false } = {}) {
     DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE: fixtureDir,
     DEMONX_CIRCUIT_ACCEPTANCE_KICAD_DIR: join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0') };
   if (noNativeTools) {
+    runtimeEnv.DEMONX_CIRCUIT_ACCEPTANCE_NO_NATIVE_TOOLS = '1';
     const emptyPrograms = join(workDir, 'no-native-tool-search');
     runtimeEnv.ProgramFiles = emptyPrograms;
     runtimeEnv['ProgramFiles(x86)'] = emptyPrograms;
@@ -184,7 +185,7 @@ try {
   await screenshot(`desktop-${switchedTheme}.png`);
 
   await click('new-project');
-  const created = await waitUntil(`document.getElementById('project-state')?.textContent === 'OPEN'`, 'new project creation through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
+  const created = await waitUntil(`document.getElementById('project-state')?.textContent === 'OPEN'`, 'new project creation, including native ERC/DRC, through packaged IPC', 120000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
   let manifest = null;
   const createdProjectPath = join(projectRoot, 'DemonX-Circuit-Project');
   try { manifest = JSON.parse(await readFile(join(createdProjectPath, 'project.json'), 'utf8')); } catch {}
@@ -206,7 +207,7 @@ try {
     await clickSelector('#result-dialog .modal-actions button');
     const firstProjectId = manifest.projectId;
     await click('new-project');
-    await waitUntil(`document.getElementById('project-id')?.textContent !== ${JSON.stringify(firstProjectId)}`, 'repeated project name creates a new native project', 5000);
+    await waitUntil(`document.getElementById('project-id')?.textContent !== ${JSON.stringify(firstProjectId)}`, 'repeated project name creates a new native project', 120000);
     const repeatedFiles = ['DemonX-Circuit-Project-2.kicad_pro', 'DemonX-Circuit-Project-2.kicad_sch', 'DemonX-Circuit-Project-2.kicad_pcb'].map(name => ({ name, exists: existsSync(join(projectRoot, 'DemonX-Circuit-Project-2', name)) }));
     check('repeated project creation preserves the existing folder and creates a native suffixed project', repeatedFiles.every(file => file.exists) && existsSync(join(createdProjectPath, 'DemonX-Circuit-Project.kicad_pcb')), JSON.stringify(repeatedFiles));
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
