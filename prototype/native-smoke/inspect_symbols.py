@@ -67,7 +67,7 @@ def main():
         if not any(f'(symbol "{target}"' in source for target in TARGETS):
             continue
         parsed = parse(tokenize(source))
-        library = path.parent.name.removesuffix(".kicad_symdir")
+        library = path.stem if path.parent == LIBRARY_ROOT else path.parent.name.removesuffix(".kicad_symdir")
         for symbol in find_nodes(parsed, "symbol"):
             name = symbol[1]
             if name not in TARGETS:
@@ -77,10 +77,11 @@ def main():
             for pin in find_nodes(symbol, "pin"):
                 pin_name = direct(pin, "name")
                 pin_number = direct(pin, "number")
-                if pin_name and pin_number:
-                    pins.append(f"{pin_number[1]}={pin_name[1]}")
+                if pin_number:
+                    pins.append(f"{pin_number[1]}={pin_name[1] if pin_name else ''}")
             footprints = [prop[2] for prop in find_nodes(symbol, "property") if len(prop) > 2 and prop[1] == "Footprint"]
-            print(f"{library}:{name}\tfootprint={','.join(footprints) or '(unset)'}\tpins={'; '.join(pins)}")
+            extends = direct(symbol, "extends")
+            print(f"{library}:{name}\textends={extends[1] if extends else '(none)'}\tfootprint={','.join(footprints) or '(unset)'}\tpins={'; '.join(pins)}")
     if not found:
         raise SystemExit("No requested KiCad library symbols found")
 

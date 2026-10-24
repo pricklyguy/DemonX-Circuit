@@ -50,6 +50,10 @@ INFO Configuration is valid!
 
 The failing run and correction are retained in GitHub Actions history; only the passing output establishes YAML schema acceptance.
 
+## Safe toolchain provisioning
+
+The proven Linux path uses official KiCad 10.0.7 and ESPHome 2026.10.0 containers pinned by immutable digests, run in disposable Ubuntu CI with the repository mounted as a workspace. For future Windows verification, use a disposable GitHub-hosted Windows runner and the official signed KiCad installer; verify the Authenticode signature before invoking it and pin the exact downloaded artifact/version. GitHub documents each hosted runner job as a fresh VM, and KiCad publishes the Windows signature-verification procedure. This Windows path is researched but **NOT TESTED**. Do not install onto the developer workstation or change its PATH/registry. ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [KiCad Windows installer verification](https://www.kicad.org/help/windows-download-verification/), [KiCad Windows downloads](https://www.kicad.org/download/windows/))
+
 ## Candidate circuit selections
 
 - Controller: ESP32-S3-WROOM-1-N8; GPIO8 SDA, GPIO9 SCL and GPIO10 relay control are candidate assignments. Native symbol pad numbering still needs a checked mapping.

@@ -1,7 +1,7 @@
 # DemonX Circuit — Checkpoint 2 results
 
-Date: 2026-10-24  
-Branch: `codex/demonx-circuit-foundation`  
+Date: 2026-10-24
+Branch: `codex/demonx-circuit-foundation`
 
 ## Recommendation
 
