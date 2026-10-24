@@ -37,6 +37,13 @@ jobs:
               python3 -c "import pcbnew; print(\"pcbnew:\", pcbnew.GetBuildVersion())"
               test -d /usr/share/kicad/symbols
               test -d /usr/share/kicad/footprints
+              test -f /usr/share/kicad/template/sym-lib-table
+              test -f /usr/share/kicad/template/fp-lib-table
+              export KICAD10_SYMBOL_DIR=/usr/share/kicad/symbols
+              export KICAD10_FOOTPRINT_DIR=/usr/share/kicad/footprints
+              mkdir -p "$HOME/.config/kicad/10.0"
+              cp /usr/share/kicad/template/sym-lib-table "$HOME/.config/kicad/10.0/sym-lib-table"
+              cp /usr/share/kicad/template/fp-lib-table "$HOME/.config/kicad/10.0/fp-lib-table"
 
               # Bootstrap pinned pip into /tmp only; the CLI image omits pip.
               python3 prototype/native-smoke/bootstrap_pip.py
