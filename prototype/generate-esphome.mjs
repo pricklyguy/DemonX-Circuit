@@ -6,19 +6,23 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const project = JSON.parse(await readFile(resolve(repo, 'examples/esp32-sensor/project.json'), 'utf8'));
+const args = process.argv.slice(2);
+const stdoutOnly = args.includes('--stdout');
+const projectArg = args.indexOf('--project');
+if (projectArg >= 0 && (!args[projectArg + 1] || args[projectArg + 1].startsWith('--'))) throw new Error('--project requires a project.json path');
+const projectPath = projectArg >= 0 ? resolve(args[projectArg + 1]) : resolve(repo, 'examples/esp32-sensor/project.json');
+const project = JSON.parse(await readFile(projectPath, 'utf8'));
 const secretsTemplate = resolve(repo, 'examples/esp32-sensor/esphome-secrets.example.yaml');
 const controller = project.hardware.controller;
 const pinMap = project.hardware.pinMap;
-const args = process.argv.slice(2);
 const force = args.includes('--force');
 const verifiedArg = args.indexOf('--verified-netlist');
 const verifiedPath = verifiedArg >= 0 ? args[verifiedArg + 1] : undefined;
 if (verifiedArg >= 0 && (!verifiedPath || verifiedPath.startsWith('--'))) throw new Error('--verified-netlist requires a JSON file exported after native KiCad netlist verification');
-const outputArgs = args.filter((arg, index) => arg !== '--force' && index !== verifiedArg && !(verifiedArg >= 0 && index === verifiedArg + 1));
-if (outputArgs.length > 1) throw new Error('Usage: node generate-esphome.mjs [output.yaml] [--verified-netlist verified-netlist.json] [--force]');
+const outputArgs = args.filter((arg, index) => arg !== '--force' && arg !== '--stdout' && index !== verifiedArg && !(verifiedArg >= 0 && index === verifiedArg + 1) && index !== projectArg && !(projectArg >= 0 && index === projectArg + 1));
+if (outputArgs.length > 1 || (stdoutOnly && outputArgs.length)) throw new Error('Usage: node generate-esphome.mjs [output.yaml] [--project project.json] [--verified-netlist verified-netlist.json] [--stdout] [--force]');
 const output = outputArgs[0] ? resolve(outputArgs[0]) : resolve(repo, 'examples/esp32-sensor/esphome.yaml');
-await mkdir(dirname(output), { recursive: true });
+if (!stdoutOnly) await mkdir(dirname(output), { recursive: true });
 if (controller.esphomeVariant !== 'esp32s3') throw new Error(`Unsupported ESPHome variant ${controller.esphomeVariant}`);
 const map = Object.fromEntries(project.hardware.nets.flatMap(net => net.connections.map(endpoint => [endpoint, net.name])));
 const pins = { sda: pinMap.I2C_SDA, scl: pinMap.I2C_SCL, relay: pinMap.RELAY_DRIVER };
@@ -99,6 +103,13 @@ switch:
     pin: \${relay_gpio}
     restore_mode: ALWAYS_OFF
 `;
+
+if (stdoutOnly) {
+  process.stdout.write(yaml);
+  process.stderr.write(verifiedPath ? `Native KiCad connectivity source: ${native.source}\n` : 'Connectivity source: project manifest only; native KiCad connectivity is not verified.\n');
+  process.stderr.write('Circuit connectivity does not determine sensor behavior, relay polarity, or credentials. Review and validate before use.\n');
+  process.exit(0);
+}
 
 let existing;
 try { existing = await readFile(output, 'utf8'); }

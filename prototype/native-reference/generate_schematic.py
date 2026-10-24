@@ -51,7 +51,7 @@ components = [
     ("RF_Module:ESP32-S3-WROOM-1", "U1", "ESP32-S3-WROOM-1-N8", (72, 88), "RF_Module:ESP32-S3-WROOM-1"),
     ("Sensor:BME280", "U2", "BME280 0x76", (135, 62), "Package_LGA:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering"),
     ("Regulator_Switching:TPS563201", "U3", "TPS563201 3V3", (52, 55), "Package_TO_SOT_SMD:SOT-23-6"),
-    ("Device:L_Small", "L1", "2.2uH", (72, 55), "Inductor_SMD:L_1210_3225Metric"),
+    ("Device:L_Small", "L1", "Coilcraft XGL4020-222MEC 2.2uH", (72, 55), "DemonX_Project:Coilcraft_XGL4020_222MEC"),
     ("Device:C", "C1", "10uF input", (32, 45), "Capacitor_SMD:C_0805_2012Metric"),
     ("Device:C", "C2", "100nF bootstrap", (62, 44), "Capacitor_SMD:C_0603_1608Metric"),
     ("Device:C", "C3", "22uF output", (91, 45), "Capacitor_SMD:C_0805_2012Metric"),

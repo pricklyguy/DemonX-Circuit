@@ -6,3 +6,7 @@
 build/
 dist/
 exports/
+node_modules/
+.npm-cache/
+desktop/dist/
+desktop/capture/

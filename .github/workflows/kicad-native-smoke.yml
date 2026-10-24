@@ -10,6 +10,7 @@ on:
       - "prototype/native-reference/**"
       - "examples/native-smoke/**"
       - "examples/esp32-sensor/**"
+      - "examples/libraries/**"
   workflow_dispatch:
 
 permissions:
@@ -23,6 +24,12 @@ jobs:
     steps:
       - name: Check out feature branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up isolated FreeRouting runtime (Java 25)
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '25'
 
       - name: Verify isolated image and Python bindings
         run: |
@@ -43,6 +50,8 @@ jobs:
               test -f /usr/share/kicad/template/fp-lib-table
               export KICAD10_SYMBOL_DIR=/usr/share/kicad/symbols
               export KICAD10_FOOTPRINT_DIR=/usr/share/kicad/footprints
+              echo "=== User-owned native library export/delete/reimport/reuse proof ==="
+              python3 prototype/native-reference/library_roundtrip.py
               python3 prototype/native-smoke/inspect_symbols.py
               mkdir -p "$HOME/.config/kicad/10.0"
               cp /usr/share/kicad/template/sym-lib-table "$HOME/.config/kicad/10.0/sym-lib-table"
@@ -99,7 +108,65 @@ jobs:
                 echo "FAIL: Reopened ESP32 schematic ERC reported violations (exit $reference_erc_reopened_status)." >&2
                 exit "$reference_erc_reopened_status"
               fi
+              python3 prototype/native-reference/generate_board.py reports/native-reference/DX_ESP32_Sensor.net
               echo "PASS: Native ESP32 reference schematic generated, netlisted, ERC-checked, and reopened."
+            '
+
+      - name: Run pinned FreeRouting on KiCad Specctra DSN
+        run: |
+          set -euo pipefail
+          mkdir -p reports/native-reference/layout "$RUNNER_TEMP/freerouting-data"
+          jar="$RUNNER_TEMP/freerouting-2.5.0.jar"
+          curl --fail --location --retry 3 \
+            https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar \
+            --output "$jar"
+          echo "f6f51bb02245e8e717f9359bd260cc9c5c0b1bc0acc8b7cb2cd5b8ffeb5de3c7  $jar" | sha256sum --check
+          java -version
+          java -jar "$jar" \
+            -de reports/native-reference/layout/DX_ESP32_Sensor.dsn \
+            -do reports/native-reference/layout/DX_ESP32_Sensor.ses \
+            -mp 8 -mt 1 -da --gui.enabled=false \
+            --router.copperToEdgeClearanceUm=500 \
+            --user_data_path="$RUNNER_TEMP/freerouting-data" \
+            2>&1 | tee reports/native-reference/layout/freerouting.log
+          test -s reports/native-reference/layout/DX_ESP32_Sensor.ses
+          sha256sum "$jar" reports/native-reference/layout/DX_ESP32_Sensor.dsn reports/native-reference/layout/DX_ESP32_Sensor.ses
+
+      - name: Import routed SES and perform native DRC, reopen and exports
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            -e HOME=/tmp/kicad-reference-final-home \
+            "$KICAD_IMAGE" bash -lc '
+              set -euo pipefail
+              mkdir -p "$HOME" reports/native-reference/layout/gerbers reports/native-reference/layout/drill reports/native-reference/layout/step
+              board=examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_pcb
+              ses=reports/native-reference/layout/DX_ESP32_Sensor.ses
+              python3 prototype/native-reference/import_session.py "$board" "$ses"
+              version="$(kicad-cli version)"
+              echo "$version"
+              [[ "$version" == *"10.0.7"* ]]
+              if kicad-cli pcb drc --severity-all --exit-code-violations --output reports/native-reference/layout/drc-initial.rpt "$board"; then drc_status=0; else drc_status=$?; fi
+              cat reports/native-reference/layout/drc-initial.rpt
+              if [[ "$drc_status" -ne 0 ]]; then echo "FAIL: Fixture DRC reported violations; exports withheld." >&2; exit "$drc_status"; fi
+              kicad-cli pcb upgrade --force "$board"
+              if kicad-cli pcb drc --severity-all --exit-code-violations --output reports/native-reference/layout/drc-reopened.rpt "$board"; then reopened_status=0; else reopened_status=$?; fi
+              cat reports/native-reference/layout/drc-reopened.rpt
+              if [[ "$reopened_status" -ne 0 ]]; then echo "FAIL: Reopened fixture DRC reported violations." >&2; exit "$reopened_status"; fi
+              kicad-cli pcb export gerbers --board-plot-params --layers F.Cu,B.Cu,F.Mask,B.Mask,F.Silkscreen,Edge.Cuts --output reports/native-reference/layout/gerbers/ "$board"
+              kicad-cli pcb export drill --format excellon --excellon-units mm --drill-origin absolute --output reports/native-reference/layout/drill/ "$board"
+              kicad-cli pcb export step --output reports/native-reference/layout/step/DX_ESP32_Sensor-assembly.step "$board"
+              echo "=== Fixture export inventory ==="
+              find reports/native-reference/layout -type f -printf "%P\t%s bytes\n" | sort
+              test -s reports/native-reference/layout/drc-initial.rpt
+              test -s reports/native-reference/layout/drc-reopened.rpt
+              test -s reports/native-reference/layout/step/DX_ESP32_Sensor-assembly.step
+              find reports/native-reference/layout/gerbers -type f -name '*.gbr' -print -quit | grep -q .
+              find reports/native-reference/layout/drill -type f -print -quit | grep -q .
+              echo "PASS: KiCad 10.0.7 imported the routed SES, DRC passed before and after reopen, and fixture Gerber/Excellon/assembly STEP files were generated."
             '
 
       - name: Generate ESPHome YAML from native verified nets

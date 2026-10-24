@@ -4,7 +4,24 @@
   "projectId": "dx-esp32-bme280-relay-demo",
   "name": "ESP32 Sensor Controller",
   "revision": "0.1.0",
-  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch"], "status": "schematic connectivity and ERC passed in KiCad 10.0.7 CI; PCB not created" },
+  "libraries": [
+    {
+      "id": "DemonX_User",
+      "path": "libraries/DemonX_User",
+      "footprints": "libraries/DemonX_User.pretty",
+      "owner": "local-user",
+      "license": "CC0-1.0",
+      "status": "original KiCad symbol and footprint; portable project copy"
+    },
+    {
+      "id": "DemonX_Project",
+      "path": "libraries/DemonX_Project.pretty",
+      "owner": "DemonX Circuit prototype",
+      "license": "CC0-1.0 authored footprint; manufacturer geometry cited",
+      "status": "prototype footprint from Coilcraft XGL4020-222MEC recommended land pattern; no manufacturer 3D model bundled"
+    }
+  ],
+  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch", "native/DX_ESP32_Sensor.kicad_pcb"], "status": "candidate fixture only; inspect the matching KiCad CI run and reports before relying on PCB results; NOT APPROVED FOR MANUFACTURE" },
   "hardware": {
     "controller": {
       "manufacturer": "Espressif",
@@ -29,7 +46,8 @@
       { "ref": "K1", "kind": "relay", "value": "Omron G5V-1 DC5", "pins": ["COIL+", "COIL-", "COM", "NO", "NC"], "loadUse": "low-voltage DC only; no mains" },
       { "ref": "Q1", "kind": "relay-driver", "value": "onsemi MMBT2222ALT1G", "footprint": "SOT-23" },
       { "ref": "D1", "kind": "flyback-diode", "value": "onsemi MMSD4148T1G", "role": "SOD-123; across 5V relay coil; cathode to +5V, anode to transistor collector" },
-      { "ref": "U3", "kind": "buck-regulator", "value": "TI TPS563201", "output": "3.3V", "inductor": "2.2uH; manufacturer part and saturation-current/DCR requirements remain to be selected", "feedback": "33.2k/10.0k per TI reference design" },
+      { "ref": "U3", "kind": "buck-regulator", "value": "TI TPS563201", "output": "3.3V", "inductor": "Coilcraft XGL4020-222MEC; 2.2uH, Isat 4.4A at 20% drop, Irms 8.9A at 40C rise; verify ripple/peak current, thermal behavior, and PCB land pattern in application", "feedback": "33.2k/10.0k per TI reference design" },
+      { "ref": "L1", "kind": "buck-inductor", "value": "Coilcraft XGL4020-222MEC", "footprint": "DemonX_Project:Coilcraft_XGL4020_222MEC", "provenance": "project-authored footprint from Coilcraft Doc 1529-3 recommended land pattern" },
       { "ref": "R8", "kind": "address-strap-jumper", "value": "0 ohm", "role": "Connect BME280 SDO to GND for address 0x76; populate to enable the selected address" }
     ],
     "nets": [

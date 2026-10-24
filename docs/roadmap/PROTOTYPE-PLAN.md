@@ -70,7 +70,7 @@ These are manufacturer-sourced candidates, not an approved production design. Ve
 
 Proceed with an Electron 45 project/workflow shell (TypeScript UI) and separate KiCad 10.0.7 installation. Reuse the native editor for schematic and PCB canvas work. Initial controls should cover New/Open Project, Add Component/library ownership, Open in KiCad, Check Circuit, Prepare Manufacturing Files, Ask AI, Generate ESPHome YAML and Create Enclosure handoff. The main process owns allowlisted native CLI/ESPHome process adapters; the renderer stays sandboxed and has no direct filesystem or shell privilege. Show results, assumptions and diffs before any write or external action.
 
-This recommendation is for the first UI milestone only; the Electron app has not been implemented or packaged. Electron 45.0.0 stable was current on 2026-10-24. Tauri remains the lighter alternative if a platform spike shows Electron packaging or memory costs are unacceptable.
+This recommendation is for the first UI milestone only; implementation is an Electron 45/TypeScript workflow-shell preview on the approved branch. Its renderer/preload compile, but this Windows environment did not complete Electron startup. A Windows CI job attempts a real capture and portable ZIP; no launch or packaging success is claimed until its artifacts/logs are inspected. Electron 45.0.0 stable was current on 2026-10-24. Tauri remains the lighter alternative if a later platform spike shows Electron packaging or memory costs are unacceptable.
 
 ## Proposed implementation phases
 
