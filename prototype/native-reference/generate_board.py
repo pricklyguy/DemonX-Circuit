@@ -59,12 +59,6 @@ if missing:
 board = pcbnew.BOARD()
 settings = board.GetDesignSettings()
 settings.SetCopperLayerCount(2)
-# Use a documented 2-layer, 1 oz feasibility profile instead of KiCad's
-# generic defaults: this profile supports >=0.10 mm traces and >=0.15 mm
-# drilled holes. The explicit 0.15 mm floors preserve margin over those minima.
-# Reconfirm the selected fabricator's capabilities before any manufacturing.
-settings.m_TrackMinWidth = pcbnew.FromMM(0.15)
-settings.m_MinThroughDrill = pcbnew.FromMM(0.15)
 footprints = {}
 for reference, (x, y, angle) in PLACEMENTS.items():
     library, name = component_data[reference]["footprint"].split(":", 1)
@@ -125,7 +119,7 @@ if not pcbnew.ExportSpecctraDSN(board, str(DSN_FILE)):
     raise RuntimeError("KiCad pcbnew.ExportSpecctraDSN failed")
 print(f"Created native candidate board: {BOARD_FILE}")
 print(f"Placed footprints: {len(footprints)}; nets: {len(net_items)}")
-print("Applied feasibility profile: 2-layer, 1 oz; min trace 0.15 mm; min drill 0.15 mm.")
+print("Project DRC feasibility profile: 2-layer, 1 oz; min trace 0.15 mm; min drill 0.15 mm.")
 print(f"Board outline: x=5..133 mm, y=5..95 mm; 2 copper layers")
 print("ESP32-S3-WROOM-1 KiCad footprint includes antenna keepout polygons; verify their placement before accepting DRC.")
 print("Candidate layout only — NOT APPROVED FOR MANUFACTURE.")

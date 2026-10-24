@@ -154,7 +154,25 @@ if issues:
     raise RuntimeError("Schematic generator validation: " + "; ".join(issue.message for issue in issues))
 
 schematic.save(str(PROJECT.with_suffix(".kicad_sch")))
-PROJECT.with_suffix(".kicad_pro").write_text("{}\n", encoding="utf-8")
+project_settings = {
+    "board": {
+        "design_settings": {
+            "rules": {
+                # Feasibility profile for two-layer, 1 oz prototype boards.
+                # Public capability reference permits 0.10 mm traces and
+                # 0.15 mm drilled holes; use 0.15 mm floors here.
+                "min_track_width": 0.15,
+                "min_through_hole_diameter": 0.15,
+            }
+        }
+    },
+    "meta": {"filename": "DX_ESP32_Sensor.kicad_pro", "version": 1},
+}
+PROJECT.with_suffix(".kicad_pro").write_text(
+    json.dumps(project_settings, indent=2) + "\n",
+    encoding="utf-8",
+)
+print("Created KiCad project DRC minima: track=0.15 mm; through-hole=0.15 mm; no rules disabled.")
 FOOTPRINT_TABLE.write_text(
     '(fp_lib_table\n'
     '  (version 7)\n'
