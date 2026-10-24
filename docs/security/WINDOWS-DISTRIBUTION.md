@@ -16,6 +16,16 @@ The workflow reports these separately:
 
 These signals address different questions. None alone establishes that software is malware-free or guarantees that Chrome will accept a download.
 
+## Checkpoint 4 successful build evidence
+
+- Build commit: `ff15e03115c155022e6131ee43c2a4d17d6af4d0` on `codex/demonx-circuit-foundation`; build date `2026-10-24`; package version `0.5.0`.
+- [GitHub Actions run 40124011182](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40124011182) passed. The [Windows development-preview artifact](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40124011182/artifacts/12572795325) contains the portable ZIP, release manifest, checksum sidecars, Defender report, package-inventory evidence, native reports/exports and provenance status. The [packaged acceptance artifact](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40124011182/artifacts/12572965106) contains the 36-check report and actual dark/light screenshots. Artifacts expire `2026-11-23`.
+- ZIP SHA-256: `7298020fe11b28393a726db6da49be3c2fcdea5db436e2570e36b41463a5269f` (`DemonX-Circuit-Windows-Preview-0.5.0.zip`). Primary executable SHA-256: `8e84549b05d27d444da2957653200d1e0ac287eff0fc5722b92835b9e0821a59` (`DemonX Circuit.exe`). The ZIP digest matches the attested subject.
+- Dependency audit: `npm audit --audit-level=high`, 0 vulnerabilities. Package integrity: PASS, 113 packaged files. Microsoft Defender Antivirus: PASS; output states `found no threats`. These are point-in-time signals, not a guarantee of safety.
+- GitHub provenance: PASS. `actions/attest@v4.2.2` created build provenance for ZIP SHA-256 `7298020fe11b28393a726db6da49be3c2fcdea5db436e2570e36b41463a5269f`; the Sigstore certificate and attestation were uploaded to Rekor and GitHub ([attestation 59463204](https://github.com/pricklyguy/DemonX-Circuit/attestations/59463204)).
+- Authenticode signing: **UNSIGNED**. The app executable has no publisher signature. No public release was created. Chrome/browser reputation and owner-machine download/launch behavior remain **NOT TESTED**.
+- Packaged Windows acceptance: 36 PASS, 0 FAIL, 0 NOT TESTED on GitHub-hosted Windows 2022 with KiCad 10.0.7 and ESPHome 2026.10.0. This includes real native project creation/reopen, native ERC/DRC, Gerber/Excellon/STEP, YAML validation, settings/theme persistence, and no renderer/preload exceptions. The ESP32 fixture remains **NOT APPROVED FOR MANUFACTURE**.
+
 ## Pinned Windows build inputs
 
 - Windows runner: `windows-2022` (GitHub-hosted disposable runner).
