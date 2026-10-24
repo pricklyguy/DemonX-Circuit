@@ -15,6 +15,9 @@ TARGETS = {
     "MMBT2222A",
     "MMSD4148",
     "1N4148",
+    "L_Small",
+    "Q_NPN_BEC",
+    "D",
 }
 
 
