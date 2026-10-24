@@ -15,6 +15,7 @@ const artifactDir = resolve(process.argv[3] || 'reports/desktop-acceptance');
 await mkdir(artifactDir, { recursive: true });
 const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
 const projectRoot = join(workDir, 'DemonX Circuit Projects');
+const missingToolsProjectRoot = join(workDir, 'No KiCad Available');
 const userData = join(workDir, 'user-data');
 const fixtureDir = join(dirname(executable), 'resources', 'app', 'examples', 'esp32-sensor');
 const hasFixture = existsSync(join(fixtureDir, 'native', 'DX_ESP32_Sensor.kicad_pcb'));
@@ -154,7 +155,7 @@ async function screenshot(name) {
   report.screenshots.push(path);
 }
 async function launch({ noNativeTools = false } = {}) {
-  const runtimeEnv = { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: noNativeTools ? join(workDir, 'missing-tools-user-data') : userData,
+  const runtimeEnv = { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: noNativeTools ? missingToolsProjectRoot : projectRoot, DEMONX_CIRCUIT_USER_DATA: noNativeTools ? join(workDir, 'missing-tools-user-data') : userData,
     DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE: fixtureDir,
     DEMONX_CIRCUIT_ACCEPTANCE_KICAD_DIR: join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0') };
   if (noNativeTools) {
@@ -336,7 +337,7 @@ try {
   await waitUntil(`document.getElementById('result-dialog').open`, 'helpful error on New Project without KiCad');
   const missingProjectMessage = await evaluate(`document.getElementById('result-message').textContent`);
   check('New Project explains the missing KiCad requirement', /requires a runnable KiCad CLI|Install KiCad 10\.0\.7/i.test(missingProjectMessage), missingProjectMessage);
-  check('missing KiCad does not leave a metadata-only project folder', !existsSync(join(projectRoot, 'DemonX-Circuit-Project')), 'The project directory was not created when KiCad was unavailable.');
+  check('missing KiCad does not leave a metadata-only project folder', !existsSync(join(missingToolsProjectRoot, 'DemonX-Circuit-Project')), 'The isolated no-tool location stayed empty after New Project was rejected.');
 
   if (report.unhandled.length) fail('zero renderer/preload exceptions', JSON.stringify(report.unhandled));
   else pass('zero renderer/preload exceptions', 'No CDP Runtime exceptions were observed during startup or tested clicks.');

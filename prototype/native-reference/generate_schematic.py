@@ -6,6 +6,8 @@ not a substitute for circuit simulation, layout review, or hardware testing.
 """
 
 import json
+import os
+import re
 from pathlib import Path
 
 import kicad_sch_api as ksa
@@ -15,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECT_DIR = ROOT / "examples" / "esp32-sensor" / "native"
 PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 PROJECT = PROJECT_DIR / "DX_ESP32_Sensor"
+SYMBOL_TABLE = PROJECT_DIR / "sym-lib-table"
 FOOTPRINT_TABLE = PROJECT_DIR / "fp-lib-table"
+LIBRARY_TEMPLATE_DIR = Path(os.environ.get("KICAD_TEMPLATE_DIR", "/usr/share/kicad/template"))
 GRID_MM = 1.27
 
 
@@ -45,8 +49,9 @@ for suffix in (".kicad_pro", ".kicad_sch", ".kicad_pcb"):
     target = PROJECT.with_suffix(suffix)
     if target.exists():
         raise FileExistsError(f"Refusing to replace existing native project file: {target}")
-if FOOTPRINT_TABLE.exists():
-    raise FileExistsError(f"Refusing to replace existing project footprint table: {FOOTPRINT_TABLE}")
+for table in (SYMBOL_TABLE, FOOTPRINT_TABLE):
+    if table.exists():
+        raise FileExistsError(f"Refusing to replace existing project library table: {table}")
 
 # Connection groups are defined by verified datasheet pin numbers. Labels keep
 # the generated sheet readable while leaving native wire editing to KiCad.
@@ -173,15 +178,34 @@ PROJECT.with_suffix(".kicad_pro").write_text(
     encoding="utf-8",
 )
 print("Created KiCad project DRC minima: track=0.15 mm; through-hole=0.15 mm; no rules disabled.")
-FOOTPRINT_TABLE.write_text(
-    '(fp_lib_table\n'
-    '  (version 7)\n'
-    '  (lib (name "DemonX_Project") (type "KiCad") '
-    '(uri "${KIPRJMOD}/../libraries/DemonX_Project.pretty") '
-    '(options "") (descr "DemonX project-owned component footprints"))\n'
-    ')\n',
+project_library_entries = {
+    "sym-lib-table": (
+        '  (lib (name "DemonX_Project") (type "KiCad") '
+        '(uri "${KIPRJMOD}/../libraries/DemonX_Project.kicad_sym") '
+        '(options "") (descr "DemonX project-owned symbols"))\n'
+    ),
+    "fp-lib-table": (
+        '  (lib (name "DemonX_Project") (type "KiCad") '
+        '(uri "${KIPRJMOD}/../libraries/DemonX_Project.pretty") '
+        '(options "") (descr "DemonX project-owned component footprints"))\n'
+    ),
+}
+for table_name, local_entry in project_library_entries.items():
+    template = LIBRARY_TEMPLATE_DIR / table_name
+    try:
+        contents = template.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RuntimeError(f"KiCad's supported library table template is unavailable: {template}") from error
+    updated, count = re.subn(r"\)\s*$", local_entry + ")\n", contents, count=1)
+    if count != 1:
+        raise RuntimeError(f"KiCad library table template has an unexpected structure: {template}")
+    (PROJECT_DIR / table_name).write_text(updated, encoding="utf-8")
+project_symbol_library = ROOT / "examples/esp32-sensor/libraries/DemonX_Project.kicad_sym"
+project_symbol_library.write_text(
+    '(kicad_symbol_lib (version 20231120) (generator "kicad_symbol_editor"))\n',
     encoding="utf-8",
 )
+print("Created project library tables from KiCad's installed templates, preserving standard libraries.")
 
 pin_map = {
     "project": "DX_ESP32_Sensor",
