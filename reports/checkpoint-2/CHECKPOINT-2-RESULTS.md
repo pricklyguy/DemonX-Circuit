@@ -17,8 +17,10 @@ For the first usable DemonX Circuit desktop application, build an Electron 45 pr
 | Minimal project ERC/DRC | **PASS** | Initial and reopened ERC/DRC exit codes `0/0`; 0 ERC errors/warnings, 0 DRC violations, 0 unconnected pads. |
 | Gerber/Excellon export | **PASS** | Gerber X2 layer set (copper, mask, paste, silkscreen, outline) and Excellon drill file generated. Coordinate alignment and downstream Gerber-to-DXF are not proven. |
 | STEP export | **PASS, limited** | Non-empty board-only STEP file generated. Component assembly geometry/orientations are **NOT TESTED**. |
-| ESPHome starter YAML | **PASS** | Generator output uses GPIO8 SDA, GPIO9 SCL, GPIO10 relay; it marks this as a candidate/logical map, not native verified connectivity. |
-| ESPHome schema validation | **PASS** | Official `ghcr.io/esphome/esphome:2026.10.0` pinned by digest; [passing run 40054368439](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40054368439) reports `Version: 2026.10.0` and `INFO Configuration is valid!`. A first run failed because all-zero test API encryption is rejected; CI now creates a random ephemeral validation key and removes its secret file before artifact upload. |
+| Reference schematic generation | **PASS** | KiCad 10.0.7 generated the editable 23-component ESP32-S3-WROOM-1-N8/BME280/TPS563201/relay schematic. The native XML netlist matched all 16 expected nets, including GPIO8/GPIO9/GPIO10 and relay contact groups. [Passing run 40056972003](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40056972003), artifact 12544939443. |
+| Reference schematic ERC/reopen | **PASS** | Initial and reopened KiCad ERC both report 0 errors and 0 warnings. Symbol inheritance warnings, the BME280 address strap/ERC conflict and an invalid generic inductor footprint were exposed and corrected during iterative runs. The final check did not suppress ERC rules. |
+| ESPHome YAML from native netlist | **PASS** | Generator now requires KiCad-verified `U1.12=I2C_SDA`, `U1.17=I2C_SCL`, `U1.18=RELAY_GPIO` and the separately recorded Espressif GPIO map before writing YAML. The same passing run reports `Native KiCad connectivity source: DX_ESP32_Sensor.net`. |
+| ESPHome schema validation | **PASS** | Official `ghcr.io/esphome/esphome:2026.10.0` pinned by digest; final integrated run reports `INFO Configuration is valid!` with GPIO8/9/10. Validation secrets are generated ephemerally and removed before artifact upload. An earlier integrated attempt **FAIL**ed because the example all-zero API key is reserved; this was fixed and rerun. |
 | MCP subset smoke | **PASS, limited** | Local Windows Node.js 24.19.0: `MCP subset smoke passed: initialization, tool discovery/schema annotations, read-only inspect/export/generation, resource read, and invalid-argument/method errors.` This reads the JSON manifest, not the native KiCad project. |
 
 Relevant exact output:
@@ -35,16 +37,18 @@ DRC exit codes (initial/reopened): 0/0
 PASS: KiCad 10.0.7; native project generated, checked, exported, and reopened by CLI.
 
 ESPHome 2026.10.0
-INFO Reading configuration dx-esp32-sensor.generated.yaml...
+INFO Reading configuration DX_ESP32_Sensor.esphome.yaml...
 INFO Configuration is valid!
   i2c_sda: GPIO8
   i2c_scl: GPIO9
   relay_gpio: GPIO10
 ```
 
+The last lines above are native-derived YAML schema validation. This is not an ESPHome firmware compile, circuit simulation, board DRC or hardware test.
+
 ## Not tested / current blockers
 
-- Full ESP32-S3-WROOM-1-N8/BME280/relay native schematic and PCB, fixture-specific ERC/DRC, manufacturing exports and assembly STEP.
+- The full schematic passed netlist verification and ERC, but its PCB has not been created. Fixture-specific board DRC, Gerber/Excellon exports and assembly STEP are **NOT TESTED**; the small LED/resistor board alone passed those native manufacturing checks.
 - Native custom component creation/edit/export/reimport; personal library backup/restore; community component search with explicit redistribution-rights enforcement.
 - ESPHome firmware compile, hardware behavior, upload, Device Builder handoff or Home Assistant changes.
 - MCP SDK/current-spec implementation and real Codex/OpenAI or Claude/Anthropic client interoperability.
@@ -58,6 +62,6 @@ The candidate set is TI TPS563201 regulator, Bosch BME280, Omron G5V-1 5 V relay
 
 ## Proposed next milestone
 
-Create the component-level native ESP32 fixture using official KiCad 10 symbol/pad mappings verified against manufacturer datasheets. Export and reimport a user-owned native library component. Run fixture ERC/DRC before using schematic-derived connectivity to generate ESPHome YAML. Retain exact tool output and unresolved electrical/layout findings; build the Electron shell only after this fixture path demonstrates the library and native-project lifecycle.
+Create and route a two-layer PCB for the passing native ESP32 fixture. Run board DRC, reopen the generated project, and produce fixture-specific Gerber, Excellon and 3D assembly outputs when the component models and orientations are available. In parallel, demonstrate a native user-owned component library export/reimport. Then review layout, antenna keepout and electrical suitability before treating any manufacturing file as ready for fabrication.
 
 Owner decisions are listed in [the roadmap](../../docs/roadmap/PROTOTYPE-PLAN.md): approve Electron 45 or request a Tauri comparison, approve the candidate components for prototype placement (not manufacturing), confirm low-voltage-only relay scope, and select client versions for later MCP conformance tests.

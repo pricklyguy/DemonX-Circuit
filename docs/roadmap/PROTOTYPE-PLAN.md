@@ -11,12 +11,15 @@ Checkpoint 1 approval is recorded. Work is isolated on `codex/demonx-circuit-fou
 | Manufacturing smoke exports | **PASS** | Gerber X2 layers and job file, Excellon drill file, non-empty board-only STEP. Coordinate/converter accuracy and component-assembly STEP were not checked. |
 | KiCad existing library access | **PASS, limited** | Official symbol/footprint tables were initialized in the isolated official KiCad image; built-in LED, resistor and connector assets loaded. Not a community library search or custom library round-trip. |
 | User custom component native export/import | **NOT TESTED** | Existing MCP fixture exports one JSON component record; no native `.kicad_sym`/`.pretty` create-export-reimport was executed. |
+| Reference ESP32 schematic | **PASS** | KiCad 10.0.7 generated an editable 23-component native schematic. Its native XML netlist passed all 16 expected named-net assertions. Reopened ERC reports 0 errors and 0 warnings. [Run 40056972003](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40056972003), artifact 12544939443. |
+| ESPHome from native connectivity | **PASS** | The generator checks native netlist U1.12/U1.17/U1.18 groups against the ESP32-S3 datasheet pin map, then the official ESPHome 2026.10.0 CLI reports `INFO Configuration is valid!`. No firmware compile or hardware connection. |
+| Reference board DRC/manufacturing/3D | **NOT TESTED** | The reference PCB has not been laid out. The only board-level DRC, Gerber, drill and board STEP proof is the small LED/resistor smoke board. |
 | MCP project inspection | **PASS, limited** | Windows Node 24.19.0 `node prototype/smoke.mjs` passed init, tool discovery, read-only manifest/component/YAML calls, resource read and invalid-input handling. It reads the JSON fixture, not native KiCad. |
 | MCP interoperability | **NOT TESTED** | Hand-written protocol subset targets 2025-11-25. No official SDK, Codex/OpenAI, Claude/Anthropic or other-client conformance claim. |
 | ESP32-S3 YAML generation | **PASS** | Generated from the explicit candidate GPIO8 SDA / GPIO9 SCL / GPIO10 relay map. Generator creates missing parent directories and refuses existing outputs unless backup, comparison and typed approval are used. |
 | ESPHome config validation | **PASS** | Official ESPHome 2026.10.0 image, pinned by digest, printed `INFO Configuration is valid!`; parsed substitutions as GPIO8/9/10. Passing [run 40054368439](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40054368439). |
 | ESPHome compile/deploy | **NOT TESTED** | `esphome config` only; no compilation, hardware connection, flashing, Device Builder upload or HA change. CI uses disposable placeholder secrets and removes the file before artifact upload. |
-| Complete reference fixture | **NOT TESTED** | No native ESP32-S3/BME280/relay schematic or PCB yet; therefore no fixture ERC/DRC, Gerbers, drill, component assembly STEP or native-derived firmware map. Candidate parts are documented in [ESP32-REFERENCE-FIXTURE-COMPONENTS.md](../research/ESP32-REFERENCE-FIXTURE-COMPONENTS.md). |
+| Complete reference fixture | **PARTIAL** | Schematic, native connectivity assertions, ERC and native-derived ESPHome YAML schema validation pass. PCB placement/routing, fixture DRC, fixture Gerbers/drill and assembly STEP remain untested. Candidate parts and physical design limits are documented in [ESP32-REFERENCE-FIXTURE-COMPONENTS.md](../research/ESP32-REFERENCE-FIXTURE-COMPONENTS.md). |
 | Windows EDA and ESPHome workflow | **NOT TESTED** | Host has no KiCad CLI or ESPHome; no host installations or machine changes. Windows was tested for Node/MCP/YAML generation only. |
 | Gerber-to-DXF / CNC and Forge | **NOT TESTED** | No geometry handoff or manufacturing coordinate test in this checkpoint. |
 
@@ -79,7 +82,7 @@ This recommendation is for the first UI milestone only; the Electron app has not
 
 ## Exact next milestone
 
-**Create and verify the component-level ESP32-S3/BME280/relay native KiCad fixture.** First enumerate official KiCad 10 symbol pin numbers and footprint mappings against manufacturer datasheets, then make the native project and a native-library export/reimport artifact. Run ERC/DRC on the fixture before allowing the ESPHome generator to claim it uses verified project connectivity. Produce a full STEP assembly only when component models and orientation are confirmed. Current host can safely reuse the documented Ubuntu CI + digest-pinned KiCad image; Windows KiCad remains untested.
+**Lay out and route the native ESP32-S3/BME280/relay fixture PCB, then close the user-owned library proof.** Preserve antenna keepout and datasheet package constraints; run KiCad DRC, reopen, export Gerber X2/Excellon and inspect STEP geometry/orientation. Also create/export/reimport one original personal library component using KiCad-native files. Keep the board unfit for manufacture until layout and electrical review plus hardware validation.
 
 ## Owner decisions at this checkpoint
 

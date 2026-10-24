@@ -4,7 +4,7 @@
   "projectId": "dx-esp32-bme280-relay-demo",
   "name": "ESP32 Sensor Controller",
   "revision": "0.1.0",
-  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch"], "status": "schematic generated; native ERC pending; PCB not created" },
+  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch"], "status": "schematic connectivity and ERC passed in KiCad 10.0.7 CI; PCB not created" },
   "hardware": {
     "controller": {
       "manufacturer": "Espressif",
@@ -13,7 +13,7 @@
       "esphomeVariant": "esp32s3",
       "profileSource": "Espressif ESP32-S3-WROOM-1 datasheet; N8 module variant; fixture design record",
       "nativePinNumbers": { "GPIO8": "12", "GPIO9": "17", "GPIO10": "18" },
-      "pinMapStatus": "candidate mapping for native schematic; firmware generation remains gated on native connectivity and ERC/DRC evidence"
+      "pinMapStatus": "GPIO8/GPIO9/GPIO10 map to native U1 pins 12/17/18 and their named nets were verified in the KiCad XML netlist; PCB DRC and firmware behavior are not verified"
     },
     "designIntent": {
       "inputSupply": "5V DC, low-voltage only",
@@ -21,7 +21,7 @@
       "sensor": "Bare BME280 on I2C; CSB tied to VDDIO, SDO strapped to GND through a 0-ohm jumper (address 0x76), SDA/SCL pull-ups and local decoupling required",
       "relay": "Omron G5V-1-DC5 30mA coil via onsemi MMBT2222ALT1G low-side driver; 330 ohm base resistor, 100k base-emitter pulldown and 1N4148 flyback diode; contacts are low-voltage DC only",
       "mainsRouting": false,
-      "status": "manufacturer-sourced component candidates selected; native schematic generated; PCB layout, full ERC/DRC and complete electrical review remain open"
+      "status": "manufacturer-sourced component candidates selected; native schematic netlist and ERC passed; PCB layout, DRC and complete electrical review remain open"
     },
     "components": [
       { "ref": "U1", "kind": "controller-module", "value": "ESP32-S3-WROOM-1-N8", "pins": ["3V3", "GND", "GPIO8", "GPIO9", "GPIO10"] },
