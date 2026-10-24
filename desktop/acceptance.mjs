@@ -93,12 +93,18 @@ async function click(id) {
   return clickSelector(`#${id}`);
 }
 async function clickSelector(selector) {
-  const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,disabled:!!e.disabled}; })()`);
+  const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; window.__acceptanceClick = null; document.addEventListener('click',ev=>window.__acceptanceClick={id:ev.target?.id||null,tag:ev.target?.tagName||null,x,y}, {capture:true,once:true}); return {x,y,disabled:!!e.disabled,box:{x:r.x,y:r.y,width:r.width,height:r.height},hit:document.elementFromPoint(x,y)?.id||document.elementFromPoint(x,y)?.tagName||null}; })()`);
   if (!rect) throw new Error(`Missing visible control ${selector}`);
   if (rect.disabled) throw new Error(`Control ${selector} is disabled`);
+  if (!rect.box.width || !rect.box.height) throw new Error(`Control ${selector} is not visible: ${JSON.stringify(rect)}`);
+  await cdp('Page.bringToFront');
   await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y });
-  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', buttons: 1, clickCount: 1 });
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', buttons: 0, clickCount: 1 });
+  await sleep(50);
+  const clicked = await evaluate('window.__acceptanceClick');
+  if (!clicked) throw new Error(`Mouse click was not dispatched to the page for ${selector}: ${JSON.stringify(rect)}`);
+  report.diagnostics.push({ kind: 'mouse-click', selector, ...rect, dispatched: clicked });
 }
 async function screenshot(name) {
   const result = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -123,6 +129,8 @@ async function launch() {
   await cdp('Runtime.enable'); await cdp('Page.enable'); await cdp('Log.enable'); await cdp('Network.enable');
   await cdp('Page.reload', { ignoreCache: true });
   await waitUntil(`document.readyState === 'complete'`, 'packaged page load');
+  const expectedTheme = await evaluate('window.circuit.getTheme()');
+  await waitUntil(`document.body.dataset.theme === ${JSON.stringify(expectedTheme)}`, 'preference loaded in packaged renderer');
 }
 
 try {
