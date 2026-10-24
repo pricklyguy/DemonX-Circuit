@@ -1,6 +1,6 @@
 # ESP32-S3 reference fixture component selection
 
-Status: **native schematic connectivity and KiCad ERC passed; PCB layout, DRC, and hardware validation remain outstanding**. This records manufacturer-source selection and separates datasheet facts from board-level judgments. Native KiCad 10.0.7 CI generated the 23-component sheet, verified 16 expected net groups, reopened it, and reported 0 ERC errors and 0 warnings (run [40057214585](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40057214585)).
+Status: **native schematic connectivity/ERC, feasibility routing, pre- and post-reopen DRC, manufacturing exports and a KiCad-native user-library round-trip passed in CI; engineering review and all hardware validation remain outstanding. NOT APPROVED FOR MANUFACTURE.** This records manufacturer-source selection and separates datasheet facts from board-level judgments. The latest native KiCad 10.0.7 run verified the complete prototype flow (run [40062064377](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40062064377)); detailed outcomes and limits are in the [Checkpoint 3 report](../../reports/checkpoint-3/CHECKPOINT-3-RESULTS.md).
 
 | Function | Candidate | Source-supported facts | Design decision and remaining check |
 |---|---|---|---|
