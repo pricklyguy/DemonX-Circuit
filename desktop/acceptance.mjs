@@ -201,7 +201,7 @@ try {
     const recentOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening a recent project', 3000);
     check('recent project entry reopens project', recentOpened === true, `projectId=${manifest.projectId}; condition=${recentOpened}`);
     await click('check-circuit');
-    await waitUntil(`document.getElementById('result-dialog').open`, 'new native starter ERC/DRC action');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'new native starter ERC/DRC action', 120000);
     const starterCheck = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
     check('new KiCad project runs real ERC and DRC', starterCheck.status === 'PASS' && /native KiCad check/i.test(starterCheck.message) && /ERC exit 0[\s\S]*DRC exit 0/.test(starterCheck.output), JSON.stringify(starterCheck));
     await clickSelector('#result-dialog .modal-actions button');
@@ -241,25 +241,26 @@ try {
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('check-circuit');
-    await waitUntil(`document.getElementById('result-dialog').open`, 'Check Circuit action result');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'Check Circuit action result', 120000);
     const checkStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const checkText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent + '\\n' + document.getElementById('result-output').textContent`);
     report.checks.push({ name: 'Check Circuit native ERC/DRC action', result: checkStatus, evidence: checkText });
-    if (detected.kicadCli) check('Check Circuit reports native check output', /KiCad .*check|DRC|ERC/i.test(checkText), checkText);
+    if (detected.kicadCli) check('Check Circuit passes actual fixture ERC and DRC', checkStatus === 'PASS' && /ERC exit 0[\s\S]*DRC exit 0/.test(checkText), checkText);
     else { notTested('KiCad ERC/DRC execution', 'KiCad CLI was not found on this Windows runner.'); check('Check Circuit explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(checkText), checkText); }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('prepare-manufacturing');
-    await waitUntil(`document.getElementById('result-dialog').open`, 'manufacturing action result');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'manufacturing action result', 120000);
     const manufacturingStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const manufacturingText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
+    const manufacturingOutput = await evaluate(`document.getElementById('result-output').textContent`);
     report.checks.push({ name: 'Manufacturing export action', result: manufacturingStatus, evidence: manufacturingText });
-    if (detected.kicadCli) check('manufacturing action reports output or DRC result', /Manufacturing|DRC/i.test(manufacturingText), manufacturingText);
+    if (detected.kicadCli) check('manufacturing exports include copper, drill, and STEP files', manufacturingStatus === 'PASS' && /gerbers\/.*F[_\.]Cu/i.test(manufacturingOutput) && /drill\/.*\.(drl|xln)/i.test(manufacturingOutput) && /step\/assembly\.step/i.test(manufacturingOutput), `${manufacturingText}\n${manufacturingOutput}`);
     else { notTested('Gerber/Excellon/STEP export action', 'KiCad CLI was not found on this Windows runner.'); check('Manufacturing action explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(manufacturingText), manufacturingText); }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('generate-esphome');
-    await waitUntil(`document.getElementById('yaml-dialog').open`, 'ESPHome preview dialog');
+    await waitUntil(`document.getElementById('yaml-dialog').open`, 'ESPHome preview and validation dialog', 120000);
     const yamlCheck = await evaluate(`({hasEsp32:document.getElementById('yaml-content').value.includes('esp32:'), hasVariant:document.getElementById('yaml-content').value.includes('variant: esp32s3'), hasSda:document.getElementById('yaml-content').value.includes('i2c_sda: GPIO8'), hasRelay:document.getElementById('yaml-content').value.includes('relay_gpio: GPIO10'), status:document.getElementById('yaml-status').textContent})`);
     const yamlStatus = await evaluate(`document.getElementById('yaml-status').dataset.status`);
     report.checks.push({ name: 'ESPHome generation/validation result', result: yamlStatus, evidence: yamlCheck.status });
