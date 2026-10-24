@@ -33,10 +33,21 @@ kicad-cli sch export netlist --format kicadxml --output "$OUTPUT_DIR/DX_LED_Smok
 python3 prototype/native-smoke/generate_board.py "$OUTPUT_DIR/DX_LED_Smoke.net"
 
 echo "=== Initial schematic ERC ==="
-kicad-cli sch erc --severity-all --exit-code-violations --output "$OUTPUT_DIR/erc-initial.rpt" "${PROJECT}.kicad_sch"
+overall_status=0
+if kicad-cli sch erc --severity-all --exit-code-violations --output "$OUTPUT_DIR/erc-initial.rpt" "${PROJECT}.kicad_sch"; then
+  erc_initial_status=0
+else
+  erc_initial_status=$?
+  overall_status=1
+fi
 cat "$OUTPUT_DIR/erc-initial.rpt"
 echo "=== Initial board DRC ==="
-kicad-cli pcb drc --severity-all --exit-code-violations --output "$OUTPUT_DIR/drc-initial.rpt" "${PROJECT}.kicad_pcb"
+if kicad-cli pcb drc --severity-all --exit-code-violations --output "$OUTPUT_DIR/drc-initial.rpt" "${PROJECT}.kicad_pcb"; then
+  drc_initial_status=0
+else
+  drc_initial_status=$?
+  overall_status=1
+fi
 cat "$OUTPUT_DIR/drc-initial.rpt"
 
 echo "=== Gerber X2 export ==="
@@ -52,8 +63,20 @@ echo "=== Native file reopen/save cycle ==="
 kicad-cli sch upgrade --force "${PROJECT}.kicad_sch"
 kicad-cli pcb upgrade --force "${PROJECT}.kicad_pcb"
 kicad-cli sch export netlist --format kicadxml --output "$OUTPUT_DIR/DX_LED_Smoke-reopened.net" "${PROJECT}.kicad_sch"
-kicad-cli sch erc --severity-all --exit-code-violations --output "$OUTPUT_DIR/erc-reopened.rpt" "${PROJECT}.kicad_sch"
-kicad-cli pcb drc --severity-all --exit-code-violations --output "$OUTPUT_DIR/drc-reopened.rpt" "${PROJECT}.kicad_pcb"
+if kicad-cli sch erc --severity-all --exit-code-violations --output "$OUTPUT_DIR/erc-reopened.rpt" "${PROJECT}.kicad_sch"; then
+  erc_reopened_status=0
+else
+  erc_reopened_status=$?
+  overall_status=1
+fi
+cat "$OUTPUT_DIR/erc-reopened.rpt"
+if kicad-cli pcb drc --severity-all --exit-code-violations --output "$OUTPUT_DIR/drc-reopened.rpt" "${PROJECT}.kicad_pcb"; then
+  drc_reopened_status=0
+else
+  drc_reopened_status=$?
+  overall_status=1
+fi
+cat "$OUTPUT_DIR/drc-reopened.rpt"
 
 echo "=== Export inventory ==="
 find "$OUTPUT_DIR" -type f -printf '%P\t%s bytes\n' | sort
@@ -63,4 +86,10 @@ test -s "$OUTPUT_DIR/DX_LED_Smoke-reopened.net"
 test -s "$OUTPUT_DIR/step/DX_LED_Smoke.step"
 find "$OUTPUT_DIR/gerbers" -type f -name '*.gbr' -print -quit | grep -q .
 find "$OUTPUT_DIR/drill" -type f -print -quit | grep -q .
+printf 'ERC exit codes (initial/reopened): %s/%s\n' "$erc_initial_status" "$erc_reopened_status"
+printf 'DRC exit codes (initial/reopened): %s/%s\n' "$drc_initial_status" "$drc_reopened_status"
+if [[ "$overall_status" -ne 0 ]]; then
+  echo "FAIL: KiCad ${version} found ERC/DRC violations; inspect the reports above." >&2
+  exit "$overall_status"
+fi
 echo "PASS: KiCad ${version}; native project generated, checked, exported, and reopened by CLI."
