@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECT_DIR = ROOT / "examples" / "esp32-sensor" / "native"
 PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 PROJECT = PROJECT_DIR / "DX_ESP32_Sensor"
+FOOTPRINT_TABLE = PROJECT_DIR / "fp-lib-table"
 GRID_MM = 1.27
 
 
@@ -44,6 +45,8 @@ for suffix in (".kicad_pro", ".kicad_sch", ".kicad_pcb"):
     target = PROJECT.with_suffix(suffix)
     if target.exists():
         raise FileExistsError(f"Refusing to replace existing native project file: {target}")
+if FOOTPRINT_TABLE.exists():
+    raise FileExistsError(f"Refusing to replace existing project footprint table: {FOOTPRINT_TABLE}")
 
 # Connection groups are defined by verified datasheet pin numbers. Labels keep
 # the generated sheet readable while leaving native wire editing to KiCad.
@@ -152,6 +155,15 @@ if issues:
 
 schematic.save(str(PROJECT.with_suffix(".kicad_sch")))
 PROJECT.with_suffix(".kicad_pro").write_text("{}\n", encoding="utf-8")
+FOOTPRINT_TABLE.write_text(
+    '(fp_lib_table\n'
+    '  (version 7)\n'
+    '  (lib (name "DemonX_Project") (type "KiCad") '
+    '(uri "${KIPRJMOD}/../libraries/DemonX_Project.pretty") '
+    '(options "") (descr "DemonX project-owned component footprints"))\n'
+    ')\n',
+    encoding="utf-8",
+)
 
 pin_map = {
     "project": "DX_ESP32_Sensor",
