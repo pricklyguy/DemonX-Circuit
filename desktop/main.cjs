@@ -10,11 +10,17 @@ const os = require('node:os');
 const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
 if (acceptanceRoot) {
   const userData = process.env.DEMONX_CIRCUIT_USER_DATA;
+  const acceptanceFixture = process.env.DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE;
+  let openRequests = 0;
   if (userData) app.setPath('userData', path.resolve(userData));
   const actualShowOpenDialog = dialog.showOpenDialog.bind(dialog);
   dialog.showOpenDialog = async (parent, options = {}) => {
     if (options.title === 'Choose a parent folder for the new project') return { canceled: false, filePaths: [path.resolve(acceptanceRoot)] };
-    if (options.title === 'Open DemonX Circuit Project') return { canceled: false, filePaths: [path.join(path.resolve(acceptanceRoot), 'DemonX-Circuit-Project')] };
+    if (options.title === 'Open DemonX Circuit Project') {
+      openRequests++;
+      const fixture = openRequests > 1 && acceptanceFixture ? path.resolve(acceptanceFixture) : path.join(path.resolve(acceptanceRoot), 'DemonX-Circuit-Project');
+      return { canceled: false, filePaths: [fixture] };
+    }
     return actualShowOpenDialog(parent, options);
   };
   dialog.showMessageBox = async () => ({ response: 0 });
@@ -28,6 +34,23 @@ const repoRoot = path.resolve(__dirname, '..');
 let activeProject = null;
 let win;
 const pendingYamlReplacements = new Map();
+const preferencesFile = path.join(app.getPath('userData'), 'preferences.json');
+
+async function readPreferences() {
+  try { return JSON.parse(await fs.readFile(preferencesFile, 'utf8')); }
+  catch { return {}; }
+}
+async function writePreferences(next) {
+  await fs.mkdir(path.dirname(preferencesFile), { recursive: true });
+  const temp = `${preferencesFile}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  await fs.writeFile(temp, `${JSON.stringify(next, null, 2)}\n`, { flag: 'wx' });
+  await fs.rename(temp, preferencesFile);
+}
+async function rememberProject(project) {
+  const prefs = await readPreferences();
+  const recent = [{ projectId: project.projectId, name: project.name, root: project.root }, ...(prefs.recent || []).filter(item => item.projectId !== project.projectId)].slice(0, 8);
+  await writePreferences({ ...prefs, recent });
+}
 
 function localExecutable(name, candidates = []) {
   for (const candidate of candidates) {
@@ -112,6 +135,7 @@ async function selectProject() {
   if (picked.canceled || !picked.filePaths[0]) return null;
   const summary = await summarize(picked.filePaths[0]);
   activeProject = summary;
+  await rememberProject(summary);
   win.webContents.send('project:changed', summary);
   return summary;
 }
@@ -125,7 +149,11 @@ function register(channel, handler) {
 
 register('env:get', async () => {
   const [kicad, esphome] = await Promise.all([findOnPath(kicadCli()), findOnPath(esphomeCli())]);
-  return { kicad, esphome, version: app.getVersion() };
+  const editorCandidates = process.platform === 'win32'
+    ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'kicad.exe'), path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'pcbnew.exe')]
+    : ['/usr/bin/pcbnew', '/usr/local/bin/pcbnew'];
+  const kicadEditor = editorCandidates.find(candidate => { try { require('node:fs').accessSync(candidate); return true; } catch { return false; } }) || null;
+  return { kicad, kicadEditor, esphome, version: app.getVersion() };
 });
 register('project:new', async () => {
   const picked = await dialog.showOpenDialog(win, { title: 'Choose a parent folder for the new project', properties: ['openDirectory', 'createDirectory'] });
@@ -142,12 +170,33 @@ register('project:new', async () => {
   await fs.mkdir(path.join(base, 'libraries'));
   await fs.writeFile(path.join(base, 'project.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
   activeProject = await summarize(base);
+  await rememberProject(activeProject);
   win.webContents.send('project:changed', activeProject);
   return activeProject;
 });
 register('project:open', selectProject);
+register('project:recent', async () => (await readPreferences()).recent || []);
+register('project:open-recent', async projectId => {
+  const entry = ((await readPreferences()).recent || []).find(item => item.projectId === projectId);
+  if (!entry) throw new Error('This recent project is no longer available. Use Open Project to locate it again.');
+  const summary = await summarize(entry.root);
+  activeProject = summary;
+  await rememberProject(summary);
+  win.webContents.send('project:changed', summary);
+  return summary;
+});
 register('project:inspect', async () => activeProject ? summarize(activeProject.root) : null);
-register('theme:set', async theme => { if (theme !== 'dark' && theme !== 'light') throw new Error('Unsupported theme.'); nativeTheme.themeSource = theme; });
+register('theme:get', async () => {
+  const prefs = await readPreferences();
+  const theme = prefs.theme === 'light' ? 'light' : 'dark';
+  nativeTheme.themeSource = theme;
+  return theme;
+});
+register('theme:set', async theme => {
+  if (theme !== 'dark' && theme !== 'light') throw new Error('Unsupported theme.');
+  nativeTheme.themeSource = theme;
+  await writePreferences({ ...(await readPreferences()), theme });
+});
 register('native:open', async kind => {
   const project = ensureProject();
   if (kind !== 'schematic' && kind !== 'pcb') throw new Error('Unsupported native document.');
@@ -272,9 +321,11 @@ register('esphome:save', async (yaml, replaceApproved, approvedDestination) => {
 });
 
 async function createWindow() {
+  const prefs = await readPreferences();
+  nativeTheme.themeSource = prefs.theme === 'light' ? 'light' : 'dark';
   const preloadPath = path.join(__dirname, 'dist', 'preload.js');
   console.log(`[Circuit main] packaged=${app.isPackaged}; appPath=${app.getAppPath()}; preload=${preloadPath}; preloadExists=${require('node:fs').existsSync(preloadPath)}`);
-  win = new BrowserWindow({ width: 1360, height: 880, minWidth: 1050, minHeight: 700, backgroundColor: '#10151c', title: 'DemonX Circuit', webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  win = new BrowserWindow({ width: 1280, height: 820, minWidth: 860, minHeight: 620, backgroundColor: '#0f1519', title: 'DemonX Circuit', webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   win.webContents.on('console-message', (_event, ...details) => console.error('[Circuit renderer console]', ...details));
   win.webContents.on('preload-error', (_event, preload, error) => console.error('[Circuit preload error]', preload, error));
   win.webContents.on('did-fail-load', (_event, code, description, url) => console.error('[Circuit load error]', code, description, url));

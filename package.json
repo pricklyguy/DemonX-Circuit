@@ -1,6 +1,6 @@
 {
   "name": "demonx-circuit-preview",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "main": "desktop/main.cjs",
   "description": "DemonX Circuit desktop preview",

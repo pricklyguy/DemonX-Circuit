@@ -9,60 +9,76 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="rail">
-      <div class="brand-mark">DX</div>
-      <div class="rail-label">CIRCUIT</div>
+    <aside class="rail" aria-label="DemonX Suite">
+      <img class="brand-mark" src="./assets/dx-mark.png" alt="DemonX Suite mark">
+      <span class="rail-label">CIRCUIT</span>
       <div class="rail-spacer"></div>
       <button id="theme-toggle" class="icon-button" title="Toggle theme" aria-label="Toggle theme">◐</button>
-      <div class="rail-foot">SUITE</div>
+      <button id="settings-open" class="icon-button" title="Settings" aria-label="Settings">⚙</button>
+      <span class="rail-foot">SUITE</span>
     </aside>
     <main class="main">
       <header class="topbar">
-        <div><div class="eyebrow">DEMONX SUITE <span>/</span> HARDWARE</div><h1>DemonX Circuit</h1></div>
-        <div class="top-actions"><span id="engine-status" class="status-pill"><i></i> Checking tools…</span><button id="open-project" class="button secondary">Open Project</button><button id="new-project" class="button primary"><span>＋</span> New Project</button></div>
+        <div class="brand-heading"><div class="eyebrow">DEMONX SUITE <span>/</span> HARDWARE</div><h1>DemonX Circuit</h1></div>
+        <div class="top-actions">
+          <span id="engine-status" class="status-pill" role="status"><i></i> Checking tools…</span>
+          <button id="open-project" class="button secondary">Open Project</button>
+          <button id="new-project" class="button primary">＋ New Project</button>
+        </div>
       </header>
-      <section class="welcome card">
-        <div class="welcome-copy"><div class="eyebrow accent">DESIGN WORKSPACE</div><h2 id="welcome-title">Bring your circuit idea to life.</h2><p id="welcome-subtitle">Start a project or open the ESP32 sensor fixture to explore the native KiCad workflow.</p></div>
-        <div class="welcome-actions"><button id="welcome-new" class="button primary">New Project <span>→</span></button><button id="welcome-open" class="button secondary">Open Project</button></div>
-        <div class="orb orb-one"></div><div class="orb orb-two"></div>
+
+      <section class="welcome">
+        <div class="welcome-copy">
+          <div class="eyebrow accent">CIRCUIT DESIGN WORKSPACE</div>
+          <h2 id="welcome-title">Start with an idea.</h2>
+          <p id="welcome-subtitle">Create a local project or open one you already own. Your native files stay on this computer.</p>
+        </div>
+        <div class="workflow-note"><span class="step-number">01</span><span>Concept <b>→</b> Circuit <b>→</b> Board</span></div>
       </section>
-      <div class="workspace-grid">
-        <section class="card project-card">
-          <div class="section-head"><div><div class="eyebrow">CURRENT PROJECT</div><h2 id="project-name">No project open</h2></div><span id="project-state" class="tag neutral">READY</span></div>
-          <div id="empty-project" class="empty-state"><div class="empty-icon">⌁</div><h3>Choose a starting point</h3><p>Open the reference fixture or create a portable project folder for your own design.</p><div class="empty-actions"><button id="empty-open" class="button secondary">Open Project</button><button id="empty-new" class="button primary">New Project</button></div></div>
+
+      <section class="workspace-grid">
+        <section class="card project-card" aria-labelledby="project-name">
+          <div class="section-head"><div><div class="eyebrow">PROJECT</div><h2 id="project-name">No project open</h2></div><span id="project-state" class="tag neutral">READY</span></div>
+          <div id="empty-project" class="empty-state"><div class="empty-symbol">DX</div><h3>Your next circuit starts here</h3><p>Use New Project or Open Project above. A starter project stores portable metadata and leaves design files in your control.</p></div>
           <div id="project-details" class="project-details hidden">
-            <div class="meta-grid"><div><span>PROJECT ID</span><strong id="project-id">—</strong></div><div><span>REVISION</span><strong id="project-revision">—</strong></div><div class="wide"><span>NATIVE DESIGN STATUS</span><strong id="native-status">—</strong></div></div>
+            <div class="meta-grid"><div><span>PROJECT ID</span><strong id="project-id">—</strong></div><div><span>REVISION</span><strong id="project-revision">—</strong></div><div class="wide"><span>NATIVE DESIGN</span><strong id="native-status">—</strong></div></div>
+            <div class="section-label">DESIGN ACTIONS</div>
             <div class="action-grid">
               <button id="open-schematic" class="workflow-action"><span class="action-icon">⌗</span><span><strong>Open Schematic in KiCad</strong><small>Use KiCad’s native editor</small></span><b>↗</b></button>
               <button id="open-pcb" class="workflow-action"><span class="action-icon">▦</span><span><strong>Open PCB in KiCad</strong><small>Placement and routing</small></span><b>↗</b></button>
               <button id="check-circuit" class="workflow-action"><span class="action-icon">✓</span><span><strong>Check Circuit</strong><small>Run native ERC and DRC</small></span><b>→</b></button>
               <button id="prepare-manufacturing" class="workflow-action"><span class="action-icon">⇧</span><span><strong>Prepare Manufacturing Files</strong><small>DRC-gated Gerber, drill, STEP</small></span><b>→</b></button>
-              <button id="generate-esphome" class="workflow-action"><span class="action-icon">⌘</span><span><strong>Generate ESPHome YAML</strong><small>Preview before saving</small></span><b>→</b></button>
+              <button id="generate-esphome" class="workflow-action"><span class="action-icon">⌘</span><span><strong>Generate ESPHome YAML</strong><small>Preview and validate status</small></span><b>→</b></button>
             </div>
+            <div class="section-head component-heading"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Components</h2></div><span id="component-count" class="count">0</span></div>
+            <div id="component-list" class="component-list"><div class="list-empty">No components recorded yet.</div></div>
+            <div class="library-foot"><span id="library-summary">Personal libraries travel with your project.</span><span class="owned-tag">⌂ LOCAL DATA</span></div>
           </div>
         </section>
-        <section class="card components-card">
-          <div class="section-head"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Components</h2></div><span id="component-count" class="count">0</span></div>
-          <p class="card-hint">Components recorded in this project manifest.</p>
-          <div id="component-list" class="component-list"><div class="list-empty">Open a project to view its components.</div></div>
-          <div class="library-foot"><span id="library-summary">Personal libraries travel with your project.</span><span class="owned-tag">⌂ LOCAL DATA</span></div>
-        </section>
-        <section class="card ai-card">
-          <div class="section-head"><div><div class="eyebrow">ASSISTED DESIGN</div><h2>AI review</h2></div><span class="tag unavailable">UNAVAILABLE</span></div>
-          <div class="ai-placeholder"><div class="spark">✳</div><div><strong>Provider connection not configured</strong><p>MCP client integration is not available in this preview. No design changes can be made through AI.</p></div></div>
-          <div class="capability-row"><span>Provider-neutral MCP</span><span>Not connected</span></div>
-          <div class="capability-row"><span>Staged changes and approval</span><span>Not implemented</span></div>
-        </section>
-        <section class="card handoff-card">
-          <div class="section-head"><div><div class="eyebrow">DEMONX SUITE</div><h2>Next steps</h2></div></div>
-          <div class="handoff"><span class="handoff-icon">◈</span><div><strong>Enclosure in Forge</strong><small>STEP handoff planned</small></div><span class="tag unavailable">COMING LATER</span></div>
-          <div class="handoff"><span class="handoff-icon">▤</span><div><strong>PCB milling in CNC</strong><small>Gerber-to-DXF handoff planned</small></div><span class="tag unavailable">COMING LATER</span></div>
-          <p class="card-hint bottom-hint">These handoffs are unavailable until their interfaces are implemented and tested.</p>
-        </section>
-      </div>
-      <footer><span>Preview 0.3.0 <i>•</i> KiCad remains a separate installation</span><span>Design assistance is not engineering verification.</span></footer>
+
+        <aside class="side-column">
+          <section class="card ai-card">
+            <div class="section-head"><div><div class="eyebrow">AI ASSISTANCE</div><h2>Ask AI</h2></div><span class="tag unavailable">UNAVAILABLE</span></div>
+            <p class="ai-lead">Circuit guidance belongs in the design workflow.</p>
+            <div class="ai-placeholder"><span class="spark">✳</span><div><strong>Provider connection not configured</strong><p>Provider-neutral MCP support is planned. No AI client is connected and this preview cannot change a design.</p></div></div>
+            <div class="capability-row"><span>Codex / Claude MCP</span><span>Not connected</span></div>
+          </section>
+          <section class="card suite-card">
+            <div class="section-head"><div><div class="eyebrow">DEMONX SUITE</div><h2>Connected tools</h2></div></div>
+            <div class="tool-row"><span class="tool-icon">▤</span><span><strong>Forge enclosure handoff</strong><small>Unavailable until implemented</small></span><span class="tag unavailable">LATER</span></div>
+            <div class="tool-row"><span class="tool-icon">⌁</span><span><strong>CNC board milling</strong><small>Gerber-to-DXF handoff unavailable</small></span><span class="tag unavailable">LATER</span></div>
+            <p class="card-hint">KiCad and ESPHome are detected from this computer. Manage the separate tool installations in Settings.</p>
+          </section>
+          <section class="card components-card">
+            <div class="section-head"><div><div class="eyebrow">RECENT PROJECTS</div><h2>On this computer</h2></div></div>
+            <div id="recent-projects" class="recent-list"><div class="list-empty">Recently opened projects will appear here.</div></div>
+          </section>
+        </aside>
+      </section>
+      <footer><span>Preview 0.4.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
     </main>
   </div>
+  <dialog id="settings-dialog" class="modal settings-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2></div><button class="close-button" aria-label="Close">×</button></div><section class="setting-row"><div><strong>Appearance</strong><p>Choose the theme for this computer.</p></div><button id="settings-theme-toggle" class="button secondary" type="button">Toggle theme</button></section><section class="setting-row tool-settings"><div><strong>Tool availability</strong><p id="settings-tools">Checking installed tools…</p></div></section><section class="setting-row"><div><strong>Brand assets</strong><p>Shared DemonX Suite DX mark and copper/teal palette.</p></div><span class="tag">LOCAL</span></section><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="result-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div id="result-kicker" class="eyebrow">OPERATION RESULT</div><h2 id="result-title">Result</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="result-message"></p><pre id="result-output" class="output"></pre><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>

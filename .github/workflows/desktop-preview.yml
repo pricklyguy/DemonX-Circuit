@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
+      - "desktop/assets/**"
       - "package.json"
       - "package-lock.json"
       - "prototype/generate-esphome.mjs"
@@ -47,30 +48,6 @@ jobs:
           run-id: 40062064377
           github-token: ${{ github.token }}
 
-      - name: Attempt real Electron renderer capture
-        id: capture
-        shell: pwsh
-        run: |
-          $stdoutLog = Join-Path $env:RUNNER_TEMP "electron-capture.stdout.log"
-          $stderrLog = Join-Path $env:RUNNER_TEMP "electron-capture.stderr.log"
-          $proc = Start-Process -FilePath (Join-Path (Get-Location).Path "node_modules/electron/dist/electron.exe") `
-            -ArgumentList @(".", "--capture-screenshot") -WorkingDirectory (Get-Location).Path `
-            -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
-          $null = Wait-Process -Id $proc.Id -Timeout 45 -ErrorAction SilentlyContinue
-          $proc.Refresh()
-          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
-          $status = if (Test-Path "reports/checkpoint-3/desktop-preview.png") { "PASS" } else { "FAIL" }
-          "capture_status=$status" >> $env:GITHUB_OUTPUT
-          "Electron exited: $($proc.HasExited); exit code: $($proc.ExitCode)" | Out-File -Append $stdoutLog
-          Get-Content $stdoutLog,$stderrLog -ErrorAction SilentlyContinue
-
-      - name: Make screenshot available for checkpoint inspection
-        if: steps.capture.outputs.capture_status == 'PASS'
-        shell: pwsh
-        run: |
-          $bytes = [System.IO.File]::ReadAllBytes("reports/checkpoint-3/desktop-preview.png")
-          Write-Output ("DX_REAL_SCREENSHOT_BASE64:" + [Convert]::ToBase64String($bytes))
-
       - name: Assemble portable Windows preview folder
         shell: pwsh
         run: |
@@ -85,6 +62,7 @@ jobs:
           Copy-Item desktop/main.cjs "$appRoot/desktop/main.cjs" -Force
           Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
+          Copy-Item desktop/assets "$appRoot/desktop/assets" -Recurse -Force
           Copy-Item prototype "$appRoot/prototype" -Recurse -Force
           Copy-Item examples "$appRoot/examples" -Recurse -Force
           $nativeFixture = Join-Path (Get-Location).Path "build/native-fixture/examples/esp32-sensor/native"
@@ -92,43 +70,34 @@ jobs:
           New-Item -ItemType Directory -Force "$appRoot/examples/esp32-sensor/native" | Out-Null
           Copy-Item "$nativeFixture/*" "$appRoot/examples/esp32-sensor/native/" -Recurse -Force
           @'
-          DemonX Circuit Preview 0.3.0
+          DemonX Circuit Preview 0.4.0
 
           Launch with "DemonX Circuit.exe". This portable preview does not install software or modify PATH/registry.
           KiCad 10.0.7 must be installed separately for native schematic, PCB, ERC/DRC, and manufacturing operations.
           ESPHome CLI must be installed separately to validate the generated YAML. This preview does not deploy firmware.
           AI/MCP, Forge, and CNC handoffs are not implemented in this preview.
           '@ | Set-Content "$bundle/README.txt"
-          Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.3.0.zip -Force
+          Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.4.0.zip -Force
 
       - name: Run packaged Windows acceptance test against extracted ZIP
         shell: pwsh
         run: |
           $extracted = Join-Path (Get-Location).Path "build/windows-e2e"
-          Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.3.0.zip" -DestinationPath $extracted -Force
-          $appExe = Join-Path $extracted "DemonX-Circuit/DemonX Circuit.exe"
-          if (-not (Test-Path $appExe)) { throw "Packaged executable missing: $appExe" }
+          Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.4.0.zip" -DestinationPath $extracted -Force
+          $exeCandidates = @(Get-ChildItem -LiteralPath $extracted -Filter "DemonX Circuit.exe" -File -Recurse)
+          if ($exeCandidates.Count -ne 1) { throw "Expected one packaged executable, found $($exeCandidates.Count)." }
+          $appExe = $exeCandidates[0].FullName
+          Write-Output "PackagedExecutable=$appExe"
           & node desktop/acceptance.mjs "$appExe" (Join-Path $env:RUNNER_TEMP "desktop-acceptance")
 
-      - name: Upload Windows preview and screenshot if available
+      - name: Upload Windows preview and runtime diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: demonx-circuit-windows-preview-0.3.0
+          name: demonx-circuit-windows-preview-0.4.0
           path: |
-            build/DemonX-Circuit-Windows-Preview-0.3.0.zip
-            ${{ runner.temp }}/electron-capture.stdout.log
-            ${{ runner.temp }}/electron-capture.stderr.log
+            build/DemonX-Circuit-Windows-Preview-0.4.0.zip
           if-no-files-found: warn
-          retention-days: 30
-
-      - name: Upload real Electron screenshot separately
-        if: always() && steps.capture.outputs.capture_status == 'PASS'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: demonx-circuit-real-window-screenshot-0.3.0
-          path: reports/checkpoint-3/desktop-preview.png
-          if-no-files-found: error
           retention-days: 30
 
       - name: Upload packaged acceptance report and screenshots

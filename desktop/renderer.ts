@@ -1,6 +1,5 @@
-type IdTypeMap = { 'result-dialog': HTMLDialogElement; 'yaml-dialog': HTMLDialogElement; 'replace-dialog': HTMLDialogElement; 'yaml-content': HTMLTextAreaElement };
+type IdTypeMap = { 'result-dialog': HTMLDialogElement; 'yaml-dialog': HTMLDialogElement; 'replace-dialog': HTMLDialogElement; 'settings-dialog': HTMLDialogElement; 'yaml-content': HTMLTextAreaElement };
 const $ = <K extends string>(id: K): K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement => document.getElementById(id) as K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement;
-const buttons = ['open-project', 'new-project', 'welcome-open', 'welcome-new', 'empty-open', 'empty-new', 'open-schematic', 'open-pcb', 'check-circuit', 'prepare-manufacturing', 'generate-esphome'];
 let activeProject: ProjectSummary | null = null;
 let currentYaml = '';
 let replacementDestination: string | undefined;
@@ -26,7 +25,7 @@ function updateProject(project: ProjectSummary | null) {
   $('project-state').textContent = opened ? 'OPEN' : 'READY';
   $('project-state').className = `tag ${opened ? 'good-tag' : 'neutral'}`;
   $('welcome-title').textContent = opened ? `Your workspace is ready, ${project.name}.` : 'Bring your circuit idea to life.';
-  $('welcome-subtitle').textContent = opened ? 'Open the native design, inspect components, run checks or prepare firmware.' : 'Start a project or open the ESP32 sensor fixture to explore the native KiCad workflow.';
+  $('welcome-subtitle').textContent = opened ? 'Open your native design, check the circuit, or prepare firmware.' : 'Create a local project or open one you already own. Your native files stay on this computer.';
   const componentList = $('component-list');
   componentList.replaceChildren();
   const components = project?.components || [];
@@ -46,6 +45,7 @@ function updateProject(project: ProjectSummary | null) {
   $('check-circuit').toggleAttribute('disabled', !opened || (!project.files.schematic && !project.files.pcb));
   $('prepare-manufacturing').toggleAttribute('disabled', !project?.files.pcb);
   $('generate-esphome').toggleAttribute('disabled', !project);
+  void refreshRecentProjects();
 }
 async function act(action: () => Promise<OperationResult>) { try { showResult(await action()); } catch (error) { showResult({ status: 'FAIL', title: 'Operation failed', message: error instanceof Error ? error.message : String(error) }); } }
 async function openProject() { try { const project = await window.circuit.openProject(); if (project) updateProject(project); } catch (e) { showResult({ status: 'FAIL', title: 'Open Project', message: String(e) }); } }
@@ -89,8 +89,26 @@ function makeDiff(before: string, after: string): string {
   return out.join('\n');
 }
 
-for (const id of ['open-project', 'welcome-open', 'empty-open']) $(id).addEventListener('click', openProject);
-for (const id of ['new-project', 'welcome-new', 'empty-new']) $(id).addEventListener('click', newProject);
+async function refreshRecentProjects() {
+  try {
+    const recent = await window.circuit.getRecentProjects();
+    const list = $('recent-projects'); list.replaceChildren();
+    if (!recent.length) { const empty = document.createElement('div'); empty.className = 'list-empty'; empty.textContent = 'Recently opened projects will appear here.'; list.append(empty); return; }
+    for (const item of recent) {
+      const button = document.createElement('button'); button.className = 'recent-item'; button.type = 'button';
+      const name = document.createElement('strong'); name.textContent = item.name;
+      const location = document.createElement('small'); location.textContent = item.root;
+      button.append(name, location); button.addEventListener('click', async () => { try { updateProject(await window.circuit.openRecentProject(item.projectId)); } catch (error) { showResult({ status: 'FAIL', title: 'Open recent project', message: error instanceof Error ? error.message : String(error) }); } });
+      list.append(button);
+    }
+  } catch (error) { showResult({ status: 'FAIL', title: 'Recent projects', message: error instanceof Error ? error.message : String(error) }); }
+}
+async function toggleTheme() {
+  try { const theme = document.body.dataset.theme === 'light' ? 'dark' : 'light'; await window.circuit.setTheme(theme); document.body.dataset.theme = theme; }
+  catch (error) { showResult({ status: 'FAIL', title: 'Theme preference', message: error instanceof Error ? error.message : String(error) }); }
+}
+$('open-project').addEventListener('click', openProject);
+$('new-project').addEventListener('click', newProject);
 $('open-schematic').addEventListener('click', () => act(() => window.circuit.openNative('schematic')));
 $('open-pcb').addEventListener('click', () => act(() => window.circuit.openNative('pcb')));
 $('check-circuit').addEventListener('click', () => act(() => window.circuit.checkCircuit()));
@@ -99,10 +117,21 @@ $('generate-esphome').addEventListener('click', generateYaml);
 $('yaml-save').addEventListener('click', () => saveYaml(false));
 $('replace-cancel').addEventListener('click', () => { $('replace-dialog').close(); showResult({ status: 'CANCELLED', title: 'Replacement cancelled', message: `Original file was not changed. Backup retained at ${replacementBackup || 'the displayed backup path'}.` }); });
 $('replace-confirm').addEventListener('click', () => saveYaml(true));
-$('theme-toggle').addEventListener('click', async () => { const theme = document.body.dataset.theme === 'light' ? 'dark' : 'light'; document.body.dataset.theme = theme; await window.circuit.setTheme(theme); });
+$('theme-toggle').addEventListener('click', toggleTheme);
+$('settings-theme-toggle').addEventListener('click', toggleTheme);
+$('settings-open').addEventListener('click', () => $('settings-dialog').showModal());
 window.circuit.onProjectChanged(updateProject);
 updateProject(null);
-window.circuit.getEnvironment().then(env => {
-  $('engine-status').innerHTML = `<i class="${env.kicad ? 'online' : ''}"></i> KiCad ${env.kicad ? 'available' : 'not found'} <span>•</span> ESPHome ${env.esphome ? 'available' : 'not found'}`;
-  if (!env.kicad) $('engine-status').title = 'Install KiCad 10.0.7 separately. No system changes were made.';
-}).catch(() => { $('engine-status').textContent = 'Tool status unavailable'; });
+async function initialize() {
+  const [theme, env] = await Promise.all([window.circuit.getTheme(), window.circuit.getEnvironment()]);
+  document.body.dataset.theme = theme;
+  const kicad = env.kicad ? `KiCad CLI available` : 'KiCad CLI not found';
+  const editor = env.kicadEditor ? 'KiCad editor available' : 'KiCad editor not found';
+  const esphome = env.esphome ? `ESPHome available (${env.esphome})` : 'ESPHome not found';
+  $('engine-status').textContent = `${kicad} · ${esphome}`;
+  $('engine-status').classList.toggle('tools-missing', !env.kicad || !env.esphome);
+  $('engine-status').title = `${editor} (${env.kicadEditor || 'not detected'})\n${kicad} (${env.kicad || 'not detected'})\n${esphome}`;
+  $('settings-tools').textContent = `${editor}${env.kicadEditor ? ` (${env.kicadEditor})` : ''}. ${kicad}${env.kicad ? ` (${env.kicad})` : ''}. ${esphome}${env.esphome ? ` (${env.esphome})` : ''}. Install tools separately; Circuit does not modify system configuration.`;
+  await refreshRecentProjects();
+}
+void initialize().catch(error => { $('engine-status').textContent = 'Tool status unavailable'; showResult({ status: 'FAIL', title: 'Startup', message: error instanceof Error ? error.message : String(error) }); });

@@ -5,6 +5,7 @@
 // manifest I/O still run through the packaged app's normal main-process code.
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 
@@ -15,9 +16,11 @@ await mkdir(artifactDir, { recursive: true });
 const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
 const projectRoot = join(workDir, 'projects');
 const userData = join(workDir, 'user-data');
+const fixtureDir = join(dirname(executable), 'resources', 'app', 'examples', 'esp32-sensor');
+const hasFixture = existsSync(join(fixtureDir, 'native', 'DX_ESP32_Sensor.kicad_pcb'));
 await mkdir(projectRoot, { recursive: true });
 const port = 24000 + Math.floor(Math.random() * 12000);
-const report = { executable: basename(executable), checks: [], diagnostics: [], screenshots: [], unhandled: [] };
+const report = { executable: basename(executable), checks: [], notTested: [], diagnostics: [], screenshots: [], unhandled: [] };
 let child;
 let socket;
 let nextId = 1;
@@ -26,6 +29,7 @@ const pending = new Map();
 function pass(name, evidence) { report.checks.push({ name, result: 'PASS', evidence }); }
 function fail(name, evidence) { report.checks.push({ name, result: 'FAIL', evidence }); }
 function check(name, condition, evidence) { condition ? pass(name, evidence) : fail(name, evidence); }
+function notTested(name, reason) { report.notTested.push({ name, result: 'NOT TESTED', reason }); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function getTarget() {
   const end = Date.now() + 30000;
@@ -86,9 +90,12 @@ async function waitUntil(expression, description, timeout = 10000) {
   throw new Error(`Timed out waiting for ${description}`);
 }
 async function click(id) {
-  const rect = await evaluate(`(() => { const e = document.getElementById(${JSON.stringify(id)}); if (!e) return null; const r = e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,disabled:!!e.disabled}; })()`);
-  if (!rect) throw new Error(`Missing visible control #${id}`);
-  if (rect.disabled) throw new Error(`Control #${id} is disabled`);
+  return clickSelector(`#${id}`);
+}
+async function clickSelector(selector) {
+  const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,disabled:!!e.disabled}; })()`);
+  if (!rect) throw new Error(`Missing visible control ${selector}`);
+  if (rect.disabled) throw new Error(`Control ${selector} is disabled`);
   await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y });
   await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
   await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
@@ -102,10 +109,15 @@ async function screenshot(name) {
 async function launch() {
   child = spawn(executable, [`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=${port}`, '--circuit-acceptance'], {
     cwd: dirname(executable), windowsHide: true,
-    env: { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: userData }
+    env: { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: userData,
+      DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE: fixtureDir }
   });
   child.stdout.on('data', b => report.diagnostics.push({ kind: 'main-stdout', text: String(b).trim() }));
-  child.stderr.on('data', b => report.diagnostics.push({ kind: 'main-stderr', text: String(b).trim() }));
+  child.stderr.on('data', b => {
+    const text = String(b).trim();
+    report.diagnostics.push({ kind: 'main-stderr', text });
+    if (/\[Circuit preload error\]|uncaught exception|unhandled rejection|window startup failed/i.test(text)) report.unhandled.push({ kind: 'main-or-preload-exception', detail: text });
+  });
   const target = await getTarget();
   await connect(target.webSocketDebuggerUrl);
   await cdp('Runtime.enable'); await cdp('Page.enable'); await cdp('Log.enable'); await cdp('Network.enable');
@@ -119,11 +131,23 @@ try {
   const preload = await evaluate(`({bridge:typeof window.circuit, script:[...document.scripts].map(s=>s.getAttribute('src')), title:document.title})`);
   report.diagnostics.push({ kind: 'renderer-startup', appPath, ...preload });
   check('packaged renderer and preload bridge', preload.bridge === 'object', JSON.stringify(preload));
+  const detected = await evaluate('window.circuit.getEnvironment()');
+  report.diagnostics.push({ kind: 'installed-native-tools', ...detected });
+  check('native tool detection reflects installed tools', (typeof detected.kicad === 'string' || detected.kicad === null) && (typeof detected.kicadEditor === 'string' || detected.kicadEditor === null) && (typeof detected.esphome === 'string' || detected.esphome === null), JSON.stringify(detected));
   await screenshot('desktop-dark.png');
 
   await click('theme-toggle');
   const themeAfterClick = await waitUntil(`document.body.dataset.theme === 'light'`, 'light mode after clicking theme control', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
-  check('theme button responds', themeAfterClick === true, JSON.stringify(themeAfterClick));
+  check('theme button responds and saves preference', themeAfterClick === true, JSON.stringify(themeAfterClick));
+  await click('settings-open');
+  const settingsOpen = await evaluate(`document.getElementById('settings-dialog').open`);
+  check('settings control opens settings', settingsOpen === true, `settings dialog open=${settingsOpen}`);
+  await click('settings-theme-toggle');
+  const settingsTheme = await waitUntil(`document.body.dataset.theme === 'dark'`, 'theme control in settings', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
+  check('settings theme control responds', settingsTheme === true, JSON.stringify(settingsTheme));
+  await click('settings-theme-toggle');
+  await waitUntil(`document.body.dataset.theme === 'light'`, 'restore light mode', 3000);
+  await clickSelector('#settings-dialog .modal-actions button');
   await screenshot('desktop-light.png');
 
   await click('new-project');
@@ -136,14 +160,61 @@ try {
     await click('open-project');
     const reopened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening the created project through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
     check('Open Project reopens the created project', reopened === manifest.projectId, JSON.stringify(reopened));
+    await waitUntil(`document.querySelector('#recent-projects .recent-item')`, 'recent project list refresh');
+    await clickSelector('#recent-projects .recent-item');
+    const recentOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening a recent project', 3000);
+    check('recent project entry reopens project', recentOpened === manifest.projectId, JSON.stringify(recentOpened));
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
 
+  const fixtureId = 'dx-esp32-bme280-relay-demo';
+  let fixtureOpened = false;
+  if (hasFixture) {
+    await click('open-project');
+    fixtureOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(fixtureId)}`, 'open packaged ESP32 native fixture', 5000).catch(async error => ({ error: error.message, id: await evaluate("document.getElementById('project-id')?.textContent") }));
+    check('opens packaged ESP32 fixture project', fixtureOpened === fixtureId, JSON.stringify(fixtureOpened));
+  } else notTested('fixture-backed native project actions', 'This package does not include the verified native fixture files. The Windows workflow package includes them.');
+
+  if (fixtureOpened === fixtureId) {
+    await click('open-pcb');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'native PCB action result');
+    const openText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
+    check('Open PCB reports detected engine result or helpful missing-tool status', detected.kicadEditor ? /KiCad|PCB/i.test(openText) : /NOT TESTED:.*KiCad desktop editor was not found/i.test(openText), openText);
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('check-circuit');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'Check Circuit action result');
+    const checkText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent + '\\n' + document.getElementById('result-output').textContent`);
+    check('Check Circuit executes or identifies missing KiCad CLI', detected.kicad ? /KiCad .*check/i.test(checkText) : /NOT TESTED: KiCad CLI was not found/i.test(checkText), checkText);
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('prepare-manufacturing');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'manufacturing action result');
+    const manufacturingText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
+    check('manufacturing action executes or identifies missing KiCad CLI', detected.kicad ? /Manufacturing|DRC/i.test(manufacturingText) : /NOT TESTED: KiCad CLI was not found/i.test(manufacturingText), manufacturingText);
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('generate-esphome');
+    await waitUntil(`document.getElementById('yaml-dialog').open`, 'ESPHome preview dialog');
+    const yamlCheck = await evaluate(`({hasEsp32:document.getElementById('yaml-content').value.includes('esp32:'), hasBoard:document.getElementById('yaml-content').value.includes('esp32-s3-devkitc-1'), status:document.getElementById('yaml-status').textContent})`);
+    check('ESPHome preview generated for fixture', yamlCheck.hasEsp32 && yamlCheck.hasBoard, JSON.stringify(yamlCheck));
+    if (!detected.esphome) check('missing ESPHome status is clear', /NOT TESTED/i.test(yamlCheck.status) && /not installed|not found|not available/i.test(yamlCheck.status), yamlCheck.status);
+    else pass('ESPHome CLI installed', `Detected ${detected.esphome}; compatibility validation status shown in preview.`);
+    await click('yaml-cancel');
+  } else {
+    if (hasFixture) for (const name of ['Open PCB reports detected engine result or helpful missing-tool status', 'Check Circuit executes or identifies missing KiCad CLI', 'manufacturing action executes or identifies missing KiCad CLI', 'ESPHome preview generated for fixture']) fail(name, 'Skipped because packaged ESP32 fixture did not open.');
+    else for (const name of ['Open PCB engine availability action', 'Check Circuit KiCad CLI action', 'Manufacturing KiCad CLI action', 'ESPHome fixture preview']) notTested(name, 'Requires the packaged ESP32 native fixture.');
+  }
+
+  const exitPromise = new Promise(resolveExit => child.once('exit', resolveExit));
   await child.kill();
-  await new Promise(resolveExit => child.once('exit', resolveExit));
+  await exitPromise;
   socket?.close(); socket = undefined;
   await launch();
   const persistedTheme = await evaluate('document.body.dataset.theme || "dark"');
   check('theme preference persists across packaged-app restart', persistedTheme === 'light', `Restarted theme=${persistedTheme}`);
+  const persistedRecent = await evaluate('window.circuit.getRecentProjects()');
+  const recentId = hasFixture ? 'dx-esp32-bme280-relay-demo' : manifest?.projectId;
+  check('recent project persists across restart', Array.isArray(persistedRecent) && persistedRecent.some(p => p.projectId === recentId), JSON.stringify(persistedRecent));
   await screenshot('desktop-light-restarted.png');
 
   if (report.unhandled.length) fail('zero renderer/preload exceptions', JSON.stringify(report.unhandled));
@@ -153,7 +224,7 @@ try {
   report.diagnostics.push({ kind: 'acceptance-runner-failure', text: report.fatal });
 } finally {
   socket?.close();
-  if (child && child.exitCode === null) { child.kill(); await new Promise(resolveExit => child.once('exit', resolveExit)); }
+  if (child && child.exitCode === null) { const exitPromise = new Promise(resolveExit => child.once('exit', resolveExit)); child.kill(); await exitPromise; }
   report.endedAt = new Date().toISOString();
   const reportPath = join(artifactDir, 'acceptance-report.json');
   await writeFile(reportPath, JSON.stringify(report, null, 2));

@@ -18,9 +18,11 @@ interface OperationResult {
 }
 
 interface CircuitApi {
-  getEnvironment(): Promise<{ kicad: string | null; esphome: string | null; version: string }>;
+  getEnvironment(): Promise<{ kicad: string | null; kicadEditor: string | null; esphome: string | null; version: string }>;
   newProject(): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;
+  getRecentProjects(): Promise<Array<{ projectId: string; name: string; root: string }>>;
+  openRecentProject(projectId: string): Promise<ProjectSummary>;
   inspectProject(): Promise<ProjectSummary | null>;
   openNative(kind: "schematic" | "pcb"): Promise<OperationResult>;
   checkCircuit(): Promise<OperationResult>;
@@ -28,6 +30,7 @@ interface CircuitApi {
   previewEsphome(): Promise<OperationResult & { yaml?: string }>;
   saveEsphome(yaml: string, replaceApproved?: boolean, destination?: string): Promise<OperationResult & { existingText?: string; destination?: string; backupPath?: string }>;
   setTheme(theme: "dark" | "light"): Promise<void>;
+  getTheme(): Promise<"dark" | "light">;
   onProjectChanged(callback: (project: ProjectSummary | null) => void): void;
 }
 
