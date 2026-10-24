@@ -13,5 +13,5 @@
     "types": [],
     "sourceMap": false
   },
-  "include": ["preload.ts", "renderer.ts"]
+  "include": ["circuit-api.d.ts", "preload.ts", "renderer.ts"]
 }

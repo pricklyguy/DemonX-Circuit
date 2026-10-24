@@ -1,5 +1,3 @@
-import type { OperationResult, ProjectSummary } from './preload';
-
 type IdTypeMap = { 'result-dialog': HTMLDialogElement; 'yaml-dialog': HTMLDialogElement; 'replace-dialog': HTMLDialogElement; 'yaml-content': HTMLTextAreaElement };
 const $ = <K extends string>(id: K): K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement => document.getElementById(id) as K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement;
 const buttons = ['open-project', 'new-project', 'welcome-open', 'welcome-new', 'empty-open', 'empty-new', 'open-schematic', 'open-pcb', 'check-circuit', 'prepare-manufacturing', 'generate-esphome'];
