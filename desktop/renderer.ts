@@ -5,6 +5,22 @@ let currentYaml = '';
 let replacementDestination: string | undefined;
 let replacementBackup: string | undefined;
 
+function renderNativeTools(env: Awaited<ReturnType<typeof window.circuit.getNativeTools>>) {
+  const kicadAvailable = !!env.kicadCli && env.kicadVersion === '10.0.7';
+  const esphomeAvailable = !!env.esphome && !!env.esphomeVersion;
+  $('engine-status').textContent = kicadAvailable && esphomeAvailable ? 'Native tools ready' : !kicadAvailable && !esphomeAvailable ? 'Set up native tools' : 'Some native tools missing';
+  $('engine-status').classList.toggle('tools-missing', !kicadAvailable || !esphomeAvailable);
+  $('kicad-availability').textContent = env.kicadVersion ? `KiCad ${env.kicadVersion}` : 'NOT FOUND';
+  $('kicad-availability').className = `tag ${kicadAvailable ? 'available' : 'unavailable'}`;
+  $('esphome-availability').textContent = env.esphomeVersion ? `ESPHome ${env.esphomeVersion}` : 'NOT FOUND';
+  $('esphome-availability').className = `tag ${esphomeAvailable ? 'available' : 'unavailable'}`;
+  const editor = env.kicadEditor ? `${env.kicadEditorVersion || 'KiCad'} editor available (${env.kicadEditor})` : 'KiCad editor not found';
+  const kicad = env.kicadCli ? `KiCad CLI ${env.kicadVersion || 'version unknown'} (${env.kicadCli})` : `KiCad CLI not found${env.kicadCliError ? `: ${env.kicadCliError}` : ''}`;
+  const esphome = env.esphome ? `ESPHome ${env.esphomeVersion || 'version unknown'} (${env.esphome})` : `ESPHome not found${env.esphomeError ? `: ${env.esphomeError}` : ''}`;
+  $('engine-status').title = `${editor}\n${kicad}${env.compatibilityMessage ? `\n${env.compatibilityMessage}` : ''}\n${esphome}`;
+  $('settings-tools').textContent = `${editor}. ${kicad}. ${esphome}.${env.compatibilityMessage ? ` ${env.compatibilityMessage}` : ''}`;
+}
+
 function showResult(item: OperationResult) {
   $('result-kicker').textContent = item.status;
   $('result-kicker').className = `eyebrow ${item.status === 'PASS' ? 'good' : item.status === 'FAIL' ? 'bad' : ''}`;
@@ -44,12 +60,12 @@ function updateProject(project: ProjectSummary | null) {
   $('open-pcb').toggleAttribute('disabled', !project?.files.pcb);
   $('check-circuit').toggleAttribute('disabled', !opened || (!project.files.schematic && !project.files.pcb));
   $('prepare-manufacturing').toggleAttribute('disabled', !project?.files.pcb);
-  $('generate-esphome').toggleAttribute('disabled', !project);
+  $('generate-esphome').toggleAttribute('disabled', !project?.capabilities.esphome);
   void refreshRecentProjects();
 }
 async function act(action: () => Promise<OperationResult>) { try { showResult(await action()); } catch (error) { showResult({ status: 'FAIL', title: 'Operation failed', message: error instanceof Error ? error.message : String(error) }); } }
 async function openProject() { try { const project = await window.circuit.openProject(); if (project) updateProject(project); } catch (e) { showResult({ status: 'FAIL', title: 'Open Project', message: String(e) }); } }
-async function newProject() { try { const project = await window.circuit.newProject(); if (project) updateProject(project); } catch (e) { showResult({ status: 'FAIL', title: 'New Project', message: String(e) }); } }
+async function newProject() { try { const project = await window.circuit.newProject(); if (project) updateProject(project); } catch (e) { const message = e instanceof Error ? e.message : String(e); showResult({ status: /KiCad CLI|KiCad 10\.0\.7/i.test(message) ? 'NOT TESTED' : 'FAIL', title: 'New Project', message }); } }
 async function generateYaml() {
   try {
     const preview = await window.circuit.previewEsphome();
@@ -121,22 +137,20 @@ $('replace-confirm').addEventListener('click', () => saveYaml(true));
 $('theme-toggle').addEventListener('click', toggleTheme);
 $('settings-theme-toggle').addEventListener('click', toggleTheme);
 $('settings-open').addEventListener('click', () => $('settings-dialog').showModal());
+$('select-kicad').addEventListener('click', async () => {
+  try { renderNativeTools(await window.circuit.selectKiCadInstall()); }
+  catch (error) { showResult({ status: 'FAIL', title: 'KiCad setup', message: error instanceof Error ? error.message : String(error) }); }
+});
+$('select-esphome').addEventListener('click', async () => {
+  try { renderNativeTools(await window.circuit.selectEsphomeExecutable()); }
+  catch (error) { showResult({ status: 'FAIL', title: 'ESPHome setup', message: error instanceof Error ? error.message : String(error) }); }
+});
 window.circuit.onProjectChanged(updateProject);
 updateProject(null);
 async function initialize() {
-  const [theme, env] = await Promise.all([window.circuit.getTheme(), window.circuit.getEnvironment()]);
+  const [theme, env] = await Promise.all([window.circuit.getTheme(), window.circuit.getNativeTools()]);
   document.body.dataset.theme = theme;
-  const kicad = env.kicad ? `KiCad CLI available` : 'KiCad CLI not found';
-  const editor = env.kicadEditor ? 'KiCad editor available' : 'KiCad editor not found';
-  const esphome = env.esphome ? `ESPHome available (${env.esphome})` : 'ESPHome not found';
-  $('engine-status').textContent = env.kicad && env.esphome ? 'Native tools ready' : 'Some native tools missing';
-  $('kicad-availability').textContent = env.kicad ? 'AVAILABLE' : 'NOT FOUND';
-  $('kicad-availability').className = `tag ${env.kicad ? 'available' : 'unavailable'}`;
-  $('esphome-availability').textContent = env.esphome ? 'AVAILABLE' : 'NOT FOUND';
-  $('esphome-availability').className = `tag ${env.esphome ? 'available' : 'unavailable'}`;
-  $('engine-status').classList.toggle('tools-missing', !env.kicad || !env.esphome);
-  $('engine-status').title = `${editor} (${env.kicadEditor || 'not detected'})\n${kicad} (${env.kicad || 'not detected'})\n${esphome}`;
-  $('settings-tools').textContent = `${editor}${env.kicadEditor ? ` (${env.kicadEditor})` : ''}. ${kicad}${env.kicad ? ` (${env.kicad})` : ''}. ${esphome}${env.esphome ? ` (${env.esphome})` : ''}. Install tools separately; Circuit does not modify system configuration.`;
+  renderNativeTools(env);
   await refreshRecentProjects();
 }
 void initialize().catch(error => { $('engine-status').textContent = 'Tool status unavailable'; showResult({ status: 'FAIL', title: 'Startup', message: error instanceof Error ? error.message : String(error) }); });

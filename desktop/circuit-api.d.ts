@@ -6,6 +6,7 @@ interface ProjectSummary {
   nativeStatus: string;
   components: Array<{ ref: string; value: string; kind?: string }>;
   libraries: Array<{ name: string; path: string; count: number }>;
+  capabilities: { esphome: boolean };
   files: { schematic?: string; pcb?: string };
 }
 
@@ -18,7 +19,10 @@ interface OperationResult {
 }
 
 interface CircuitApi {
-  getEnvironment(): Promise<{ kicad: string | null; kicadEditor: string | null; esphome: string | null; version: string }>;
+  getEnvironment(): Promise<NativeToolsSummary>;
+  getNativeTools(): Promise<NativeToolsSummary>;
+  selectKiCadInstall(): Promise<NativeToolsSummary>;
+  selectEsphomeExecutable(): Promise<NativeToolsSummary>;
   newProject(): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;
   getRecentProjects(): Promise<Array<{ projectId: string; name: string; root: string }>>;
@@ -32,6 +36,23 @@ interface CircuitApi {
   setTheme(theme: "dark" | "light"): Promise<void>;
   getTheme(): Promise<"dark" | "light">;
   onProjectChanged(callback: (project: ProjectSummary | null) => void): void;
+}
+
+interface NativeToolsSummary {
+  kicadInstallDir: string | null;
+  kicadCli: string | null;
+  kicadVersion: string | null;
+  kicadCliError: string | null;
+  kicadEditor: string | null;
+  kicadEditorVersion: string | null;
+  eeschema: string | null;
+  pcbnew: string | null;
+  compatible: boolean;
+  compatibilityMessage: string | null;
+  esphome: string | null;
+  esphomeVersion: string | null;
+  esphomeError: string | null;
+  version: string;
 }
 
 interface Window { circuit: CircuitApi; }

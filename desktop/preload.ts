@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 contextBridge.exposeInMainWorld("circuit", {
   getEnvironment: () => ipcRenderer.invoke("env:get"),
+  getNativeTools: () => ipcRenderer.invoke("native-tools:get"),
+  selectKiCadInstall: () => ipcRenderer.invoke("native-tools:select-kicad"),
+  selectEsphomeExecutable: () => ipcRenderer.invoke("native-tools:select-esphome"),
   newProject: () => ipcRenderer.invoke("project:new"),
   openProject: () => ipcRenderer.invoke("project:open"),
   getRecentProjects: () => ipcRenderer.invoke("project:recent"),

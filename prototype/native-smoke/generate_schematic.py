@@ -56,10 +56,11 @@ if issues:
 
 schematic.save(str(PROJECT.with_suffix(".kicad_sch")))
 
-# KiCad CLI uses the sibling project file for board/schematic settings. An empty
-# JSON object is the minimal project settings file; KiCad supplies defaults.
+# KiCad 10.0.7 seeds its documented default project template with this native
+# project metadata (kicad/project_template.cpp, EnsureDefaultProjectTemplate).
+# Keep it version-specific and verify the result through the native CLI workflow.
 project_file = PROJECT.with_suffix(".kicad_pro")
 if project_file.exists():
     raise FileExistsError(f"Refusing to replace existing native project file: {project_file}")
-project_file.write_text("{}\n", encoding="utf-8")
+project_file.write_text('{\n "meta": {\n  "version": 1\n }\n}\n', encoding="utf-8")
 print(f"Created native project files under {PROJECT_DIR}")

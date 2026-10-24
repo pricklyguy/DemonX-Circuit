@@ -14,7 +14,7 @@ if (!process.argv[2]) throw new Error('Usage: node desktop/acceptance.mjs <porta
 const artifactDir = resolve(process.argv[3] || 'reports/desktop-acceptance');
 await mkdir(artifactDir, { recursive: true });
 const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
-const projectRoot = join(workDir, 'projects');
+const projectRoot = join(workDir, 'DemonX Circuit Projects');
 const userData = join(workDir, 'user-data');
 const fixtureDir = join(dirname(executable), 'resources', 'app', 'examples', 'esp32-sensor');
 const hasFixture = existsSync(join(fixtureDir, 'native', 'DX_ESP32_Sensor.kicad_pcb'));
@@ -113,11 +113,20 @@ async function screenshot(name) {
   await writeFile(path, Buffer.from(result.data, 'base64'));
   report.screenshots.push(path);
 }
-async function launch() {
+async function launch({ noNativeTools = false } = {}) {
+  const runtimeEnv = { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: noNativeTools ? join(workDir, 'missing-tools-user-data') : userData,
+    DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE: fixtureDir,
+    DEMONX_CIRCUIT_ACCEPTANCE_KICAD_DIR: join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0') };
+  if (noNativeTools) {
+    const emptyPrograms = join(workDir, 'no-native-tool-search');
+    runtimeEnv.ProgramFiles = emptyPrograms;
+    runtimeEnv['ProgramFiles(x86)'] = emptyPrograms;
+    runtimeEnv.LOCALAPPDATA = join(emptyPrograms, 'LocalAppData');
+    runtimeEnv.PATH = join(process.env.SystemRoot || 'C:\\Windows', 'System32');
+  }
   child = spawn(executable, [`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=${port}`, '--circuit-acceptance'], {
     cwd: dirname(executable), windowsHide: true,
-    env: { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: userData,
-      DEMONX_CIRCUIT_ACCEPTANCE_FIXTURE: fixtureDir }
+    env: runtimeEnv
   });
   child.stdout.on('data', b => report.diagnostics.push({ kind: 'main-stdout', text: String(b).trim() }));
   child.stderr.on('data', b => {
@@ -140,12 +149,12 @@ try {
   const preload = await evaluate(`({bridge:typeof window.circuit, script:[...document.scripts].map(s=>s.getAttribute('src')), title:document.title})`);
   report.diagnostics.push({ kind: 'renderer-startup', appPath, ...preload });
   check('packaged renderer and preload bridge', preload.bridge === 'object', JSON.stringify(preload));
-  const detected = await evaluate('window.circuit.getEnvironment()');
+  const detected = await evaluate('window.circuit.getNativeTools()');
   report.diagnostics.push({ kind: 'installed-native-tools', ...detected });
-  check('native tool detection reflects installed tools', (typeof detected.kicad === 'string' || detected.kicad === null) && (typeof detected.kicadEditor === 'string' || detected.kicadEditor === null) && (typeof detected.esphome === 'string' || detected.esphome === null), JSON.stringify(detected));
-  await waitUntil(`document.getElementById('kicad-availability').textContent === ${JSON.stringify(detected.kicad ? 'AVAILABLE' : 'NOT FOUND')} && document.getElementById('esphome-availability').textContent === ${JSON.stringify(detected.esphome ? 'AVAILABLE' : 'NOT FOUND')}`, 'tool availability shown in dashboard');
+  check('native tool detection reflects installed tools', (typeof detected.kicadCli === 'string' || detected.kicadCli === null) && (typeof detected.kicadEditor === 'string' || detected.kicadEditor === null) && (typeof detected.esphome === 'string' || detected.esphome === null), JSON.stringify(detected));
+  await waitUntil(`document.getElementById('kicad-availability').textContent === ${JSON.stringify(detected.kicadVersion ? `KiCad ${detected.kicadVersion}` : 'NOT FOUND')} && document.getElementById('esphome-availability').textContent === ${JSON.stringify(detected.esphomeVersion ? `ESPHome ${detected.esphomeVersion}` : 'NOT FOUND')}`, 'tool availability shown in dashboard');
   const toolUi = await evaluate(`({summary:document.getElementById('engine-status').textContent,kicad:document.getElementById('kicad-availability').textContent,esphome:document.getElementById('esphome-availability').textContent})`);
-  check('dashboard shows KiCad and ESPHome availability', toolUi.kicad === (detected.kicad ? 'AVAILABLE' : 'NOT FOUND') && toolUi.esphome === (detected.esphome ? 'AVAILABLE' : 'NOT FOUND'), JSON.stringify(toolUi));
+  check('dashboard shows KiCad and ESPHome availability', toolUi.kicad === (detected.kicadVersion ? `KiCad ${detected.kicadVersion}` : 'NOT FOUND') && toolUi.esphome === (detected.esphomeVersion ? `ESPHome ${detected.esphomeVersion}` : 'NOT FOUND'), JSON.stringify(toolUi));
   const initialTheme = await evaluate('document.body.dataset.theme');
   check('packaged app starts in its stored theme', initialTheme === 'dark' || initialTheme === 'light', `Initial theme=${initialTheme}`);
   const wordmark = await evaluate(`(() => { const image = document.querySelector('.brand-wordmark'); return image && {src:image.getAttribute('src'),complete:image.complete,width:image.naturalWidth,height:image.naturalHeight,alt:image.alt}; })()`);
@@ -163,6 +172,9 @@ try {
   await click('settings-open');
   const settingsOpen = await evaluate(`document.getElementById('settings-dialog').open`);
   check('settings control opens settings', settingsOpen === true, `settings dialog open=${settingsOpen}`);
+  await click('select-kicad');
+  const selectedNativeTools = await evaluate('window.circuit.getNativeTools()');
+  check('Native Tools settings select and validate installed KiCad', selectedNativeTools.kicadVersion === '10.0.7' && selectedNativeTools.kicadCli && selectedNativeTools.eeschema && selectedNativeTools.pcbnew && selectedNativeTools.kicadInstallDir?.includes('KiCad'), JSON.stringify(selectedNativeTools));
   await click('settings-theme-toggle');
   const settingsTheme = await waitUntil(`document.body.dataset.theme === ${JSON.stringify(initialTheme)}`, 'theme control in settings', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
   check('settings theme control responds', settingsTheme === true, JSON.stringify(settingsTheme));
@@ -174,8 +186,10 @@ try {
   await click('new-project');
   const created = await waitUntil(`document.getElementById('project-state')?.textContent === 'OPEN'`, 'new project creation through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
   let manifest = null;
-  try { manifest = JSON.parse(await readFile(join(projectRoot, 'DemonX-Circuit-Project', 'project.json'), 'utf8')); } catch {}
-  check('New Project creates a real project.json', manifest?.format === 'demonx-project', JSON.stringify({ created, projectId: manifest?.projectId }));
+  const createdProjectPath = join(projectRoot, 'DemonX-Circuit-Project');
+  try { manifest = JSON.parse(await readFile(join(createdProjectPath, 'project.json'), 'utf8')); } catch {}
+  const nativeFiles = ['.kicad_pro', '.kicad_sch', '.kicad_pcb', 'sym-lib-table', 'fp-lib-table'].map(suffix => ({ suffix, exists: existsSync(join(createdProjectPath, suffix.startsWith('.') ? `DemonX-Circuit-Project${suffix}` : suffix)) }));
+  check('New Project creates native KiCad files and project library configuration under a path containing spaces', manifest?.format === 'demonx-project' && nativeFiles.every(file => file.exists), JSON.stringify({ created, projectId: manifest?.projectId, root: createdProjectPath, nativeFiles }));
 
   if (manifest) {
     await click('open-project');
@@ -185,23 +199,43 @@ try {
     await clickSelector('#recent-projects .recent-item');
     const recentOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening a recent project', 3000);
     check('recent project entry reopens project', recentOpened === true, `projectId=${manifest.projectId}; condition=${recentOpened}`);
+    await click('check-circuit');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'new native starter ERC/DRC action');
+    const starterCheck = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
+    check('new KiCad project runs real ERC and DRC', starterCheck.status === 'PASS' && /native KiCad check/i.test(starterCheck.message) && /ERC exit 0[\s\S]*DRC exit 0/.test(starterCheck.output), JSON.stringify(starterCheck));
+    await clickSelector('#result-dialog .modal-actions button');
+    const firstProjectId = manifest.projectId;
+    await click('new-project');
+    await waitUntil(`document.getElementById('project-id')?.textContent !== ${JSON.stringify(firstProjectId)}`, 'repeated project name creates a new native project', 5000);
+    const repeatedFiles = ['DemonX-Circuit-Project-2.kicad_pro', 'DemonX-Circuit-Project-2.kicad_sch', 'DemonX-Circuit-Project-2.kicad_pcb'].map(name => ({ name, exists: existsSync(join(projectRoot, 'DemonX-Circuit-Project-2', name)) }));
+    check('repeated project creation preserves the existing folder and creates a native suffixed project', repeatedFiles.every(file => file.exists) && existsSync(join(createdProjectPath, 'DemonX-Circuit-Project.kicad_pcb')), JSON.stringify(repeatedFiles));
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
 
   const fixtureId = 'dx-esp32-bme280-relay-demo';
   let fixtureOpened = false;
   if (hasFixture) {
+    check('packaged ESP32 fixture includes the verified KiCad netlist used for firmware mapping', existsSync(join(fixtureDir, 'native', 'verified-netlist.json')), join(fixtureDir, 'native', 'verified-netlist.json'));
     await click('open-project');
     fixtureOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(fixtureId)}`, 'open packaged ESP32 native fixture', 5000).catch(async error => ({ error: error.message, id: await evaluate("document.getElementById('project-id')?.textContent") }));
     check('opens packaged ESP32 fixture project', fixtureOpened === true, `projectId=${fixtureId}; condition=${fixtureOpened}`);
   } else notTested('fixture-backed native project actions', 'This package does not include the verified native fixture files. The Windows workflow package includes them.');
 
   if (fixtureOpened === true) {
+    await click('open-schematic');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'native schematic action result');
+    const schematicStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
+    const schematicText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
+    report.checks.push({ name: 'Open Schematic native editor action', result: schematicStatus, evidence: schematicText });
+    if (detected.eeschema) check('Open Schematic starts the KiCad editor', schematicStatus === 'PASS' && /KiCad/i.test(schematicText), schematicText);
+    else notTested('Open Schematic in KiCad', 'KiCad Schematic Editor was not found on this Windows runner.');
+    await clickSelector('#result-dialog .modal-actions button');
+
     await click('open-pcb');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native PCB action result');
     const openStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const openText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
     report.checks.push({ name: 'Open PCB native editor action', result: openStatus, evidence: openText });
-    if (detected.kicadEditor) check('Open PCB action reports editor result', /KiCad|PCB/i.test(openText), openText);
+    if (detected.pcbnew) check('Open PCB starts the KiCad editor', openStatus === 'PASS' && /KiCad/i.test(openText), openText);
     else { notTested('Open PCB in KiCad', 'KiCad desktop editor was not found on this Windows runner.'); check('Open PCB explains missing editor', /NOT TESTED:.*KiCad desktop editor was not found/i.test(openText), openText); }
     await clickSelector('#result-dialog .modal-actions button');
 
@@ -210,7 +244,7 @@ try {
     const checkStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const checkText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent + '\\n' + document.getElementById('result-output').textContent`);
     report.checks.push({ name: 'Check Circuit native ERC/DRC action', result: checkStatus, evidence: checkText });
-    if (detected.kicad) check('Check Circuit reports native check output', /KiCad .*check|DRC|ERC/i.test(checkText), checkText);
+    if (detected.kicadCli) check('Check Circuit reports native check output', /KiCad .*check|DRC|ERC/i.test(checkText), checkText);
     else { notTested('KiCad ERC/DRC execution', 'KiCad CLI was not found on this Windows runner.'); check('Check Circuit explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(checkText), checkText); }
     await clickSelector('#result-dialog .modal-actions button');
 
@@ -219,7 +253,7 @@ try {
     const manufacturingStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const manufacturingText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
     report.checks.push({ name: 'Manufacturing export action', result: manufacturingStatus, evidence: manufacturingText });
-    if (detected.kicad) check('manufacturing action reports output or DRC result', /Manufacturing|DRC/i.test(manufacturingText), manufacturingText);
+    if (detected.kicadCli) check('manufacturing action reports output or DRC result', /Manufacturing|DRC/i.test(manufacturingText), manufacturingText);
     else { notTested('Gerber/Excellon/STEP export action', 'KiCad CLI was not found on this Windows runner.'); check('Manufacturing action explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(manufacturingText), manufacturingText); }
     await clickSelector('#result-dialog .modal-actions button');
 
@@ -229,6 +263,7 @@ try {
     const yamlStatus = await evaluate(`document.getElementById('yaml-status').dataset.status`);
     report.checks.push({ name: 'ESPHome generation/validation result', result: yamlStatus, evidence: yamlCheck.status });
     check('ESPHome preview generated from fixture pin map', yamlCheck.hasEsp32 && yamlCheck.hasVariant && yamlCheck.hasSda && yamlCheck.hasRelay, JSON.stringify(yamlCheck));
+    if (detected.esphome) check('ESPHome validates packaged preview with the detected CLI', yamlStatus === 'PASS' && /ESPHome .*accepted YAML/i.test(yamlCheck.status), yamlCheck.status);
     if (!detected.esphome) { notTested('ESPHome compatibility validation', 'ESPHome CLI was not installed on this Windows runner.'); check('missing ESPHome status is clear', yamlStatus === 'NOT TESTED' && /not installed|not found|not available/i.test(yamlCheck.status), yamlCheck.status); }
     await click('yaml-cancel');
   } else {
@@ -243,10 +278,23 @@ try {
   await launch();
   const persistedTheme = await evaluate('document.body.dataset.theme || "dark"');
   check('theme preference persists across packaged-app restart', persistedTheme === switchedTheme, `Restarted theme=${persistedTheme}; selected=${switchedTheme}`);
+  const persistedTools = await evaluate('window.circuit.getNativeTools()');
+  check('selected KiCad installation persists across packaged-app restart', persistedTools.kicadInstallDir === selectedNativeTools.kicadInstallDir && persistedTools.kicadVersion === '10.0.7', JSON.stringify(persistedTools));
   const persistedRecent = await evaluate('window.circuit.getRecentProjects()');
   const recentId = hasFixture ? 'dx-esp32-bme280-relay-demo' : manifest?.projectId;
   check('recent project persists across restart', Array.isArray(persistedRecent) && persistedRecent.some(p => p.projectId === recentId), JSON.stringify(persistedRecent));
   await screenshot(`desktop-${persistedTheme}-restarted.png`);
+
+  const normalExit = new Promise(resolveExit => child.once('exit', resolveExit));
+  await child.kill(); await normalExit; socket?.close(); socket = undefined;
+  await launch({ noNativeTools: true });
+  const missingTools = await evaluate('window.circuit.getNativeTools()');
+  check('missing KiCad is detected with an isolated empty search path', missingTools.kicadCli === null && missingTools.kicadVersion === null, JSON.stringify(missingTools));
+  await click('new-project');
+  await waitUntil(`document.getElementById('result-dialog').open`, 'helpful error on New Project without KiCad');
+  const missingProjectMessage = await evaluate(`document.getElementById('result-message').textContent`);
+  check('New Project explains the missing KiCad requirement', /requires a runnable KiCad CLI|Install KiCad 10\.0\.7/i.test(missingProjectMessage), missingProjectMessage);
+  check('missing KiCad does not leave a metadata-only project folder', !existsSync(join(projectRoot, 'DemonX-Circuit-Project')), 'The project directory was not created when KiCad was unavailable.');
 
   if (report.unhandled.length) fail('zero renderer/preload exceptions', JSON.stringify(report.unhandled));
   else pass('zero renderer/preload exceptions', 'No CDP Runtime exceptions were observed during startup or tested clicks.');

@@ -21,7 +21,7 @@
       "status": "prototype footprint from Coilcraft XGL4020-222MEC recommended land pattern; no manufacturer 3D model bundled"
     }
   ],
-  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch", "native/DX_ESP32_Sensor.kicad_pcb"], "status": "candidate fixture only; inspect the matching KiCad CI run and reports before relying on PCB results; NOT APPROVED FOR MANUFACTURE" },
+  "native": { "engine": "kicad", "engineVersion": "10.0.7", "files": ["native/DX_ESP32_Sensor.kicad_pro", "native/DX_ESP32_Sensor.kicad_sch", "native/DX_ESP32_Sensor.kicad_pcb"], "verifiedNetlist": "native/verified-netlist.json", "status": "candidate fixture only; inspect the matching KiCad CI run and reports before relying on PCB results; NOT APPROVED FOR MANUFACTURE" },
   "hardware": {
     "controller": {
       "manufacturer": "Espressif",

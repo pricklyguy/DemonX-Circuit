@@ -16,6 +16,8 @@ if (acceptanceRoot) {
   const actualShowOpenDialog = dialog.showOpenDialog.bind(dialog);
   dialog.showOpenDialog = async (parent, options = {}) => {
     if (options.title === 'Choose a parent folder for the new project') return { canceled: false, filePaths: [path.resolve(acceptanceRoot)] };
+    if (options.title === 'Select KiCad 10.0.7 installation folder' && process.env.DEMONX_CIRCUIT_ACCEPTANCE_KICAD_DIR) return { canceled: false, filePaths: [path.resolve(process.env.DEMONX_CIRCUIT_ACCEPTANCE_KICAD_DIR)] };
+    if (options.title === 'Select ESPHome CLI executable') return { canceled: true, filePaths: [] };
     if (options.title === 'Open DemonX Circuit Project') {
       openRequests++;
       const fixture = openRequests > 1 && acceptanceFixture ? path.resolve(acceptanceFixture) : path.join(path.resolve(acceptanceRoot), 'DemonX-Circuit-Project');
@@ -35,6 +37,7 @@ let activeProject = null;
 let win;
 const pendingYamlReplacements = new Map();
 const preferencesFile = path.join(app.getPath('userData'), 'preferences.json');
+const SUPPORTED_KICAD_VERSION = '10.0.7';
 
 async function readPreferences() {
   try { return JSON.parse(await fs.readFile(preferencesFile, 'utf8')); }
@@ -58,20 +61,66 @@ function localExecutable(name, candidates = []) {
   }
   return name;
 }
-function kicadCli() {
-  const options = process.platform === 'win32'
-    ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'kicad-cli.exe')]
-    : ['/usr/bin/kicad-cli', '/usr/local/bin/kicad-cli'];
-  for (const candidate of options) { try { require('node:fs').accessSync(candidate); return candidate; } catch {} }
-  return process.platform === 'win32' ? 'kicad-cli.exe' : 'kicad-cli';
+function exists(file) { try { require('node:fs').accessSync(file); return true; } catch { return false; } }
+function installationCandidates() {
+  if (process.platform === 'win32') return [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0'),
+    process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], 'KiCad', '10.0'),
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'KiCad', '10.0')
+  ].filter(Boolean);
+  return ['/usr', '/usr/local'];
 }
-function esphomeCli() { return process.platform === 'win32' ? 'esphome.exe' : 'esphome'; }
-async function findOnPath(binary) {
-  try { await execFileAsync(binary, ['version'], { timeout: 8000, windowsHide: true }); return binary; }
-  catch (error) {
-    if (error.code !== 'ENOENT') return binary;
-    return null;
+function toolsFromRoot(root) {
+  if (!root) return null;
+  const bin = path.basename(root).toLowerCase() === 'bin' ? root : path.join(root, 'bin');
+  const exe = process.platform === 'win32' ? '.exe' : '';
+  const cli = path.join(bin, `kicad-cli${exe}`);
+  const manager = path.join(bin, `kicad${exe}`);
+  const eeschema = path.join(bin, `eeschema${exe}`);
+  const pcbnew = path.join(bin, `pcbnew${exe}`);
+  return exists(cli) ? { root: path.basename(root).toLowerCase() === 'bin' ? path.dirname(root) : root, cli, manager: exists(manager) ? manager : null, eeschema: exists(eeschema) ? eeschema : null, pcbnew: exists(pcbnew) ? pcbnew : null } : null;
+}
+async function probeExecutable(binary, args = ['version']) {
+  if (!binary) return { path: null, version: null, error: 'Not configured or not found.' };
+  try {
+    const response = await execFileAsync(binary, args, { timeout: 12000, windowsHide: true, maxBuffer: 1024 * 1024 });
+    const output = `${response.stdout || ''}${response.stderr || ''}`.trim();
+    return { path: binary, version: output.split(/\r?\n/)[0] || 'unknown', error: null };
+  } catch (error) {
+    if (error.code === 'ENOENT') return { path: null, version: null, error: 'Executable was not found.' };
+    return { path: binary, version: null, error: `${error.message || 'Version probe failed.'}${error.stdout ? ` ${error.stdout.trim()}` : ''}`.trim() };
   }
+}
+async function selectedToolPaths() {
+  const prefs = await readPreferences();
+  for (const root of [prefs.nativeTools?.kicadInstallDir, ...installationCandidates()].filter(Boolean)) {
+    const detected = toolsFromRoot(root);
+    if (detected) return detected;
+  }
+  return null;
+}
+async function getNativeTools() {
+  const prefs = await readPreferences();
+  const kicadPaths = await selectedToolPaths();
+  const kicadProbe = await probeExecutable(kicadPaths?.cli || (process.platform === 'win32' ? 'kicad-cli.exe' : 'kicad-cli'));
+  const esphomePath = prefs.nativeTools?.esphomeExecutable || (process.platform === 'win32' ? 'esphome.exe' : 'esphome');
+  const esphomeProbe = await probeExecutable(esphomePath);
+  const cliVersion = kicadProbe.version?.match(/\b\d+\.\d+\.\d+\b/)?.[0] || null;
+  const editorPath = kicadPaths?.manager || kicadPaths?.eeschema || null;
+  const compatible = cliVersion === SUPPORTED_KICAD_VERSION;
+  return {
+    kicadInstallDir: kicadPaths?.root || prefs.nativeTools?.kicadInstallDir || null,
+    kicadCli: kicadProbe.path, kicadVersion: cliVersion, kicadCliError: kicadProbe.error,
+    kicadEditor: editorPath, kicadEditorVersion: editorPath ? cliVersion : null,
+    eeschema: kicadPaths?.eeschema || null, pcbnew: kicadPaths?.pcbnew || null,
+    compatible, compatibilityMessage: cliVersion && !compatible ? `KiCad ${SUPPORTED_KICAD_VERSION} is the verified version. Detected ${cliVersion}; native file compatibility is not verified.` : null,
+    esphome: esphomeProbe.path, esphomeVersion: esphomeProbe.version, esphomeError: esphomeProbe.error,
+    version: app.getVersion()
+  };
+}
+async function findOnPath(binary) {
+  const detected = await probeExecutable(binary);
+  return detected.path;
 }
 async function run(binary, args, cwd, timeout = 120000, extraEnv = {}) {
   try {
@@ -128,7 +177,9 @@ async function summarize(root) {
     } catch {}
   }
   return { name: manifest.name || path.basename(root), projectId: manifest.projectId || '', revision: manifest.revision || '', root,
-    nativeStatus: `${manifest.native?.status || 'No native status recorded.'}${missingNative.length ? ` Missing from this project folder: ${missingNative.join(', ')}.` : ''}`, components, libraries, files: { schematic, pcb } };
+    nativeStatus: `${manifest.native?.status || 'No native status recorded.'}${missingNative.length ? ` Missing from this project folder: ${missingNative.join(', ')}.` : ''}`, components, libraries,
+    capabilities: { esphome: manifest.firmware?.target === 'esphome' && !!manifest.hardware?.controller?.esphomeVariant && !!manifest.hardware?.pinMap },
+    files: { schematic, pcb } };
 }
 async function selectProject() {
   const picked = await dialog.showOpenDialog(win, { title: 'Open DemonX Circuit Project', properties: ['openDirectory'] });
@@ -148,26 +199,86 @@ function register(channel, handler) {
 }
 
 register('env:get', async () => {
-  const [kicad, esphome] = await Promise.all([findOnPath(kicadCli()), findOnPath(esphomeCli())]);
-  const editorCandidates = process.platform === 'win32'
-    ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'kicad.exe'), path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'pcbnew.exe')]
-    : ['/usr/bin/pcbnew', '/usr/local/bin/pcbnew'];
-  const kicadEditor = editorCandidates.find(candidate => { try { require('node:fs').accessSync(candidate); return true; } catch { return false; } }) || null;
-  return { kicad, kicadEditor, esphome, version: app.getVersion() };
+  return getNativeTools();
+});
+register('native-tools:select-kicad', async () => {
+  const picked = await dialog.showOpenDialog(win, { title: 'Select KiCad 10.0.7 installation folder', properties: ['openDirectory'] });
+  if (picked.canceled || !picked.filePaths[0]) return getNativeTools();
+  const root = path.resolve(picked.filePaths[0]);
+  const paths = toolsFromRoot(root);
+  if (!paths) throw new Error('The selected folder does not contain KiCad CLI in its bin directory. Select the KiCad installation root or its bin folder.');
+  const probe = await probeExecutable(paths.cli);
+  if (probe.error || !probe.version) throw new Error(`KiCad CLI could not be run: ${probe.error || 'unknown version'}`);
+  await writePreferences({ ...(await readPreferences()), nativeTools: { ...(await readPreferences()).nativeTools, kicadInstallDir: paths.root } });
+  return getNativeTools();
+});
+register('native-tools:select-esphome', async () => {
+  const picked = await dialog.showOpenDialog(win, { title: 'Select ESPHome CLI executable', properties: ['openFile'], filters: process.platform === 'win32' ? [{ name: 'Executable', extensions: ['exe'] }] : [] });
+  if (picked.canceled || !picked.filePaths[0]) return getNativeTools();
+  const executable = path.resolve(picked.filePaths[0]);
+  const probe = await probeExecutable(executable);
+  if (probe.error || !probe.version) throw new Error(`ESPHome CLI could not be run: ${probe.error || 'unknown version'}`);
+  const prefs = await readPreferences();
+  await writePreferences({ ...prefs, nativeTools: { ...(prefs.nativeTools || {}), esphomeExecutable: executable } });
+  return getNativeTools();
 });
 register('project:new', async () => {
+  const tools = await getNativeTools();
+  if (!tools.kicadCli || !tools.kicadVersion) throw new Error(`New Project requires a runnable KiCad CLI. ${tools.kicadCliError || 'Install KiCad 10.0.7 separately or select its installation in Settings.'}`);
+  if (!tools.compatible) throw new Error(tools.compatibilityMessage || `This preview is validated with KiCad ${SUPPORTED_KICAD_VERSION}.`);
   const picked = await dialog.showOpenDialog(win, { title: 'Choose a parent folder for the new project', properties: ['openDirectory', 'createDirectory'] });
   if (picked.canceled || !picked.filePaths[0]) return null;
   const nameAnswer = await dialog.showMessageBox(win, { type: 'info', buttons: ['Create project folder', 'Cancel'], defaultId: 0,
-    title: 'New Circuit Project', message: 'Create a new DemonX project in the selected folder?', detail: 'A project folder and portable project.json will be created. No schematic or PCB is generated.' });
+    title: 'New Circuit Project', message: 'Create a KiCad starter project in the selected folder?', detail: 'The starter includes an editable LED/resistor schematic and board. You can replace or edit it in KiCad.' });
   if (nameAnswer.response !== 0) return null;
   let base = path.join(picked.filePaths[0], 'DemonX-Circuit-Project');
   for (let suffix = 2; ; suffix++) {
     try { await fs.mkdir(base); break; }
     catch (error) { if (error.code !== 'EEXIST') throw error; base = path.join(picked.filePaths[0], `DemonX-Circuit-Project-${suffix}`); }
   }
-  const manifest = { format: 'demonx-project', formatVersion: '0.1.0', projectId: `dx-${Date.now().toString(36)}`, name: 'New Circuit Project', revision: '0.1.0', libraries: [], native: { engine: 'kicad', engineVersion: '10.0.7', files: [], status: 'Native design not created.' }, hardware: { components: [], nets: [], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
-  await fs.mkdir(path.join(base, 'libraries'));
+  const projectName = path.basename(base);
+  const fixtureDir = path.join(repoRoot, 'examples', 'native-smoke', 'DX_LED_Smoke');
+  for (const extension of ['kicad_pro', 'kicad_sch', 'kicad_pcb']) {
+    const source = path.join(fixtureDir, `DX_LED_Smoke.${extension}`);
+    const destination = path.join(base, `${projectName}.${extension}`);
+    try { await fs.copyFile(source, destination, require('node:fs').constants.COPYFILE_EXCL); }
+    catch (error) { await fs.rm(base, { recursive: true, force: true }); throw new Error(`Verified KiCad starter template is unavailable (${path.basename(source)}): ${error.message}.`); }
+  }
+  const projectFile = path.join(base, `${projectName}.kicad_pro`);
+  const projectSettings = JSON.parse(await fs.readFile(projectFile, 'utf8'));
+  if (projectSettings.meta) projectSettings.meta.filename = `${projectName}.kicad_pro`;
+  await fs.writeFile(projectFile, `${JSON.stringify(projectSettings, null, 2)}\n`);
+  await fs.mkdir(path.join(base, 'libraries', 'DemonX_Project.pretty'), { recursive: true });
+  await fs.mkdir(path.join(base, 'reports'), { recursive: true });
+  await fs.mkdir(path.join(base, 'manufacturing'), { recursive: true });
+  const installTemplate = path.join(tools.kicadInstallDir, 'share', 'kicad', 'template');
+  for (const table of ['sym-lib-table', 'fp-lib-table']) {
+    const tableSource = path.join(installTemplate, table);
+    try {
+      const contents = await fs.readFile(tableSource, 'utf8');
+      const localEntry = table === 'sym-lib-table'
+        ? '\n  (lib (name "DemonX_Project")(type "KiCad")(uri "${KIPRJMOD}/libraries/DemonX_Project.kicad_sym")(options "")(descr "Project-owned symbols"))\n'
+        : '\n  (lib (name "DemonX_Project")(type "KiCad")(uri "${KIPRJMOD}/libraries/DemonX_Project.pretty")(options "")(descr "Project-owned footprints"))\n';
+      await fs.writeFile(path.join(base, table), contents.replace(/\)\s*$/, `${localEntry})\n`), { flag: 'wx' });
+    } catch (error) { await fs.rm(base, { recursive: true, force: true }); throw new Error(`KiCad project library configuration is unavailable (${table}). ${error.message}`); }
+  }
+  const symbolLib = path.join(base, 'libraries', 'DemonX_Project.kicad_sym');
+  await fs.writeFile(symbolLib, '(kicad_symbol_lib (version 20231120) (generator "kicad_symbol_editor"))\n', { flag: 'wx' });
+  const initialCheckDir = path.join(base, 'reports', 'project-created');
+  await fs.mkdir(initialCheckDir, { recursive: true });
+  const initialChecks = [
+    ['ERC', ['sch', 'erc', '--severity-all', '--exit-code-violations', '--output', path.join(initialCheckDir, 'erc.rpt'), path.join(base, `${projectName}.kicad_sch`)]],
+    ['DRC', ['pcb', 'drc', '--severity-all', '--exit-code-violations', '--output', path.join(initialCheckDir, 'drc.rpt'), path.join(base, `${projectName}.kicad_pcb`)]]
+  ];
+  for (const [kind, args] of initialChecks) {
+    const check = await run(tools.kicadCli, args, base);
+    if (check.code !== 0) {
+      await fs.rm(base, { recursive: true, force: true });
+      throw new Error(`KiCad ${tools.kicadVersion} rejected the starter project during ${kind} (exit ${check.code}). ${check.output}`);
+    }
+  }
+  const projectId = `dx-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  const manifest = { format: 'demonx-project', formatVersion: '0.2.0', projectId, name: projectName, revision: '0.1.0', libraries: [{ id: 'DemonX_Project', path: 'libraries/DemonX_Project.kicad_sym', footprints: 'libraries/DemonX_Project.pretty' }], native: { engine: 'kicad', engineVersion: tools.kicadVersion, files: [`${projectName}.kicad_pro`, `${projectName}.kicad_sch`, `${projectName}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'], status: 'Native LED/resistor starter project created and ERC/DRC checked by KiCad 10.0.7.' }, hardware: { components: [{ ref: 'J1', value: '5V INPUT', kind: 'connector' }, { ref: 'R1', value: '330', kind: 'resistor' }, { ref: 'D1', value: 'RED LED', kind: 'LED' }], nets: [{ name: '5V_IN' }, { name: 'GND' }], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
   await fs.writeFile(path.join(base, 'project.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
   activeProject = await summarize(base);
   await rememberProject(activeProject);
@@ -186,6 +297,7 @@ register('project:open-recent', async projectId => {
   return summary;
 });
 register('project:inspect', async () => activeProject ? summarize(activeProject.root) : null);
+register('native-tools:get', getNativeTools);
 register('theme:get', async () => {
   const prefs = await readPreferences();
   const theme = prefs.theme === 'light' ? 'light' : 'dark';
@@ -203,18 +315,19 @@ register('native:open', async kind => {
   const file = project.files[kind];
   if (!file) return result('NOT TESTED', `Open ${kind}`, `No ${kind} file is listed in this project.`);
   try { await fs.access(file); } catch { return result('NOT TESTED', `Open ${kind}`, `The project references a missing ${kind} file: ${file}`); }
-  const candidates = process.platform === 'win32'
-    ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', 'kicad.exe'), path.join(process.env.ProgramFiles || 'C:\\Program Files', 'KiCad', '10.0', 'bin', kind === 'pcb' ? 'pcbnew.exe' : 'eeschema.exe')]
-    : [kind === 'pcb' ? '/usr/bin/pcbnew' : '/usr/bin/eeschema', kind === 'pcb' ? '/usr/local/bin/pcbnew' : '/usr/local/bin/eeschema'];
-  let executable = candidates.find(candidate => { try { require('node:fs').accessSync(candidate); return true; } catch { return false; } });
+  const tools = await getNativeTools();
+  const executable = kind === 'pcb' ? tools.pcbnew : tools.eeschema;
   if (!executable) return result('NOT TESTED', `Open ${kind}`, 'KiCad desktop editor was not found. Install KiCad 10.0.7 separately; Circuit does not install it.');
-  const launched = spawn(executable, [file], { detached: true, stdio: 'ignore', windowsHide: false });
-  launched.unref();
-  return result('PASS', `Open ${kind}`, `Started KiCad with ${path.basename(file)}.`);
+  const args = [file];
+  return new Promise(resolve => {
+    const launched = spawn(executable, args, { cwd: project.root, detached: true, stdio: 'ignore', windowsHide: false, shell: false });
+    launched.once('error', error => resolve(result('FAIL', `Open ${kind}`, `KiCad could not be started: ${error.message}`)));
+    launched.once('spawn', () => { launched.unref(); resolve(result('PASS', `Open ${kind}`, `Started KiCad ${tools.kicadVersion || ''} with ${path.basename(file)}.`)); });
+  });
 });
 register('circuit:check', async () => {
   const project = ensureProject();
-  const cli = await findOnPath(kicadCli());
+  const cli = (await getNativeTools()).kicadCli;
   if (!cli) return result('NOT TESTED', 'Check Circuit', 'KiCad CLI was not found. Install KiCad 10.0.7 separately.');
   const reportDir = path.join(project.root, 'reports', `check-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}`);
   await fs.mkdir(reportDir, { recursive: true });
@@ -238,7 +351,7 @@ register('circuit:check', async () => {
 register('manufacturing:prepare', async () => {
   const project = ensureProject();
   if (!project.files.pcb) return result('NOT TESTED', 'Prepare Manufacturing Files', 'This project has no native PCB file.');
-  const cli = await findOnPath(kicadCli());
+  const cli = (await getNativeTools()).kicadCli;
   if (!cli) return result('NOT TESTED', 'Prepare Manufacturing Files', 'KiCad CLI was not found. Install KiCad 10.0.7 separately.');
   try { await fs.access(project.files.pcb); } catch { return result('NOT TESTED', 'Prepare Manufacturing Files', 'The project PCB file is missing.'); }
   const checkDir = path.join(project.root, 'reports', 'manufacturing-precheck'); await fs.mkdir(checkDir, { recursive: true });
@@ -269,11 +382,20 @@ register('esphome:preview', async () => {
   const project = ensureProject();
   const manifestPath = path.join(project.root, 'project.json');
   const generator = path.join(repoRoot, 'prototype', 'generate-esphome.mjs');
-  const r = await run(process.execPath, [generator, '--stdout', '--project', manifestPath], repoRoot, 120000, { ELECTRON_RUN_AS_NODE: '1' });
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  const args = [generator, '--stdout', '--project', manifestPath];
+  let verifiedNetlist = null;
+  if (typeof manifest.native?.verifiedNetlist === 'string') {
+    const candidate = safeInside(project.root, manifest.native.verifiedNetlist);
+    try { await fs.access(candidate); verifiedNetlist = candidate; } catch {}
+  }
+  if (verifiedNetlist) args.push('--verified-netlist', verifiedNetlist);
+  const r = await run(process.execPath, args, repoRoot, 120000, { ELECTRON_RUN_AS_NODE: '1' });
   if (r.code !== 0) return result('FAIL', 'Generate ESPHome YAML', r.output);
-  const cli = await findOnPath(esphomeCli());
+  const cli = (await getNativeTools()).esphome;
   const yaml = r.stdout;
-  if (!cli) return { ...result('NOT TESTED', 'Generate ESPHome YAML', 'Preview generated from the project manifest only. ESPHome CLI is not installed; compatibility validation is NOT TESTED.'), output: r.stderr.trim(), yaml };
+  const sourceLabel = verifiedNetlist ? 'verified KiCad netlist and project pin map' : 'project manifest only; native connectivity was not verified';
+  if (!cli) return { ...result('NOT TESTED', 'Generate ESPHome YAML', `Preview generated from ${sourceLabel}. ESPHome CLI is not installed; compatibility validation is NOT TESTED.`), output: r.stderr.trim(), yaml };
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'demonx-circuit-esphome-'));
   try {
     await fs.writeFile(path.join(tempDir, 'dx-preview.yaml'), yaml, { flag: 'wx' });
@@ -281,8 +403,8 @@ register('esphome:preview', async () => {
     await fs.writeFile(path.join(tempDir, 'secrets.yaml'), `wifi_ssid: "validation-placeholder"\nwifi_password: "validation-placeholder"\napi_encryption_key: "${randomKey}"\nota_password: "validation-placeholder"\nfallback_ap_password: "${randomKey.slice(0, 24)}"\n`, { flag: 'wx' });
     const validation = await run(cli, ['config', 'dx-preview.yaml'], tempDir, 120000, { HOME: tempDir, USERPROFILE: tempDir });
     const version = await run(cli, ['version'], tempDir, 15000);
-    if (validation.code !== 0) return { ...result('FAIL', 'Generate ESPHome YAML', `ESPHome ${version.output || 'CLI'} rejected the preview. Validation diagnostics may contain configuration data and were not retained.`), yaml };
-    return { ...result('PASS', 'Generate ESPHome YAML', `ESPHome ${version.output || 'CLI'} accepted YAML generated from project manifest only. Native connectivity was not verified.`), output: r.stderr.trim(), yaml };
+    if (validation.code !== 0) return { ...result('FAIL', 'Generate ESPHome YAML', `ESPHome ${version.output || 'CLI'} rejected the preview generated from ${sourceLabel}. Validation diagnostics may contain configuration data and were not retained.`), yaml };
+    return { ...result('PASS', 'Generate ESPHome YAML', `ESPHome ${version.output || 'CLI'} accepted YAML generated from ${sourceLabel}.`), output: r.stderr.trim(), yaml };
   } finally { await fs.rm(tempDir, { recursive: true, force: true }); }
 });
 register('esphome:save', async (yaml, replaceApproved, approvedDestination) => {

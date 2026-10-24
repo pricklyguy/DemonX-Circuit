@@ -12,6 +12,7 @@ on:
       - "examples/esp32-sensor/**"
       - "examples/libraries/**"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
