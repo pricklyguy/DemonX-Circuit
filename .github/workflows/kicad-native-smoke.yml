@@ -109,8 +109,15 @@ jobs:
           node prototype/generate-esphome.mjs \
             examples/esp32-sensor/native/DX_ESP32_Sensor.esphome.yaml \
             --verified-netlist reports/native-reference/verified-netlist.json
-          cp examples/esp32-sensor/esphome-secrets.example.yaml \
-            examples/esp32-sensor/native/secrets.yaml
+          api_validation_key="$(openssl rand -base64 32)"
+          cat > examples/esp32-sensor/native/secrets.yaml <<EOF
+          wifi_ssid: "validation-placeholder"
+          wifi_password: "validation-placeholder"
+          api_encryption_key: "${api_validation_key}"
+          ota_password: "validation-placeholder"
+          fallback_ap_password: "validation-placeholder"
+          EOF
+          unset api_validation_key
           echo "ESPHome image: ghcr.io/esphome/esphome:2026.10.0@sha256:1dff19a59070cdb523b76576cdc74d200f862d43c1407809088855920cf57145" \
             | tee reports/native-reference/esphome-validation.txt
 
