@@ -4,7 +4,7 @@
 // fresh temporary project root in the test process only; project creation and
 // manifest I/O still run through the packaged app's normal main-process code.
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -333,7 +333,6 @@ try {
   report.fatal = error instanceof Error ? error.stack : String(error);
   report.diagnostics.push({ kind: 'acceptance-runner-failure', text: report.fatal });
 } finally {
-  clearTimeout(acceptanceWatchdog);
   socket?.close();
   if (child && child.exitCode === null) {
     try { await stopPackagedApp('acceptance cleanup'); }
@@ -343,6 +342,11 @@ try {
   const reportPath = join(artifactDir, 'acceptance-report.json');
   await writeFile(reportPath, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  await rm(workDir, { recursive: true, force: true });
+  // Do not recursively delete the Electron profile/project while the packaged
+  // Windows runtime may still have transient handles open. On hosted runners
+  // the entire workspace is discarded with the VM; local acceptance runs can
+  // remove this explicitly after reviewing the report.
+  console.log(`[acceptance] temporary acceptance data retained at ${workDir}`);
+  clearTimeout(acceptanceWatchdog);
   if (report.fatal || report.checks.some(c => c.result === 'FAIL')) process.exitCode = 1;
 }
