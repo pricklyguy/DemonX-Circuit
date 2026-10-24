@@ -22,6 +22,17 @@ def grid_position(position):
     """Snap schematic placements to KiCad's 50 mil grid."""
     return tuple(round(value / GRID_MM) * GRID_MM for value in position)
 
+
+def wire_label(schematic, reference, pin_number, name):
+    pin_position = schematic.get_component_pin_position(reference, pin_number)
+    if pin_position is None:
+        raise RuntimeError(f"KiCad symbol pin lookup failed for {reference}.{pin_number} ({name})")
+    # KiCad netlist export does not attach a net label placed directly on a
+    # symbol pin. A short native wire provides an explicit label attachment.
+    label_position = (pin_position.x + 5.08, pin_position.y)
+    schematic.add_wire_to_pin(label_position, reference, pin_number)
+    schematic.add_label(name, position=label_position)
+
 for suffix in (".kicad_pro", ".kicad_sch", ".kicad_pcb"):
     target = PROJECT.with_suffix(suffix)
     if target.exists():
@@ -85,10 +96,7 @@ for lib_id, reference, value, position, footprint in components:
 connected = {pin for pins in net_pins.values() for pin in pins}
 for net_name, pins in net_pins.items():
     for reference, pin_number in pins:
-        position = schematic.get_component_pin_position(reference, pin_number)
-        if position is None:
-            raise RuntimeError(f"KiCad symbol pin lookup failed for {reference}.{pin_number} ({net_name})")
-        schematic.add_label(net_name, position=(position.x, position.y))
+        wire_label(schematic, reference, pin_number, net_name)
 
 # This prototype sheet uses net labels at each pin. Add explicit power flags so
 # native ERC can distinguish externally supplied and regulated power nets.
@@ -106,7 +114,9 @@ for reference, position, net_name in (
     pin_position = schematic.get_component_pin_position(reference, "1")
     if pin_position is None:
         raise RuntimeError(f"Could not resolve power flag pin for {reference}")
-    schematic.add_label(net_name, position=(pin_position.x, pin_position.y))
+    label_position = (pin_position.x + 5.08, pin_position.y)
+    schematic.add_wire_to_pin(label_position, reference, "1")
+    schematic.add_label(net_name, position=label_position)
 
 # Explicit no-connect markers make unused ESP32 module pins intentional. A
 # missing coordinate or a symbol pin lookup failure stops project generation.
