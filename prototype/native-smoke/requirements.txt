@@ -1,0 +1,2 @@
+# Test-only generator dependency. KiCad itself remains the authority for parsing and checks.
+kicad-sch-api==0.5.6
