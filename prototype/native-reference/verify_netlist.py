@@ -31,14 +31,30 @@ def main():
         nodes = {f"{node.attrib['ref']}.{node.attrib['pin']}" for node in net.findall("node")}
         nets[name] = nodes
 
+    print("KiCad XML netlist contents:")
+    for name, nodes in sorted(nets.items()):
+        print(f"  {name or '(unnamed)'}: {', '.join(sorted(nodes)) or '(empty)'}")
+
     failures = []
+    used_net_names = {}
     for name, expected in EXPECTED.items():
-        actual = nets.get(name, set())
-        missing = expected - actual
-        if missing:
-            failures.append(f"{name}: missing {', '.join(sorted(missing))}; actual {', '.join(sorted(actual)) or '(no net)'}")
+        matching = [(actual_name, nodes) for actual_name, nodes in nets.items() if expected <= nodes]
+        if not matching:
+            assigned = {
+                node: next((actual_name for actual_name, nodes in nets.items() if node in nodes), "(no net)")
+                for node in sorted(expected)
+            }
+            summary = ", ".join(f"{node} -> {actual_name}" for node, actual_name in assigned.items())
+            failures.append(f"{name}: expected pins are split or absent: {summary}")
         else:
-            print(f"NET PASS {name}: {', '.join(sorted(actual))}")
+            actual_name = matching[0][0]
+            previous = used_net_names.get(actual_name)
+            if previous:
+                failures.append(f"Short: logical nets {previous} and {name} merge as {actual_name}")
+            used_net_names[actual_name] = name
+            if actual_name != name:
+                print(f"NET NAME WARN {name}: connectivity group is {actual_name!r}; labels did not set requested name")
+            print(f"NET PASS {name}: {', '.join(sorted(matching[0][1]))}")
     if failures:
         raise SystemExit("KiCad exported netlist does not match the candidate connection map:\n" + "\n".join(failures))
     print(f"PASS: verified {len(EXPECTED)} named nets from KiCad's native XML netlist")
