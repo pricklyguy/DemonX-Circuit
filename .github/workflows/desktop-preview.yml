@@ -108,7 +108,7 @@ jobs:
           Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.3.0.zip" -DestinationPath $extracted -Force
           $appExe = Join-Path $extracted "DemonX-Circuit/DemonX Circuit.exe"
           if (-not (Test-Path $appExe)) { throw "Packaged executable missing: $appExe" }
-          node desktop/acceptance.mjs $appExe (Join-Path $env:RUNNER_TEMP "desktop-acceptance")
+          & node desktop/acceptance.mjs "$appExe" (Join-Path $env:RUNNER_TEMP "desktop-acceptance")
 
       - name: Upload Windows preview and screenshot if available
         if: always()
