@@ -93,9 +93,9 @@ for net_name, pins in net_pins.items():
 # This prototype sheet uses net labels at each pin. Add explicit power flags so
 # native ERC can distinguish externally supplied and regulated power nets.
 for reference, position, net_name in (
-    ("#FLG01", (29, 52), "+5V_IN"),
-    ("#FLG02", (29, 58), "GND"),
-    ("#FLG03", (96, 52), "+3V3"),
+    ("PF1", (15, 128), "+5V_IN"),
+    ("PF2", (25, 135), "GND"),
+    ("PF3", (210, 20), "+3V3"),
 ):
     flag = schematic.components.add(
         lib_id="power:PWR_FLAG",
