@@ -29,14 +29,19 @@ jobs:
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
             -e HOME=/tmp/kicad-smoke-home \
-            -e KICAD_IMAGE="$KICAD_IMAGE" \
             "$KICAD_IMAGE" bash -lc '
+              set -euo pipefail
               mkdir -p "$HOME" /tmp/native-smoke-python
               kicad-cli version
               python3 --version
               python3 -c "import pcbnew; print(\"pcbnew:\", pcbnew.GetBuildVersion())"
               test -d /usr/share/kicad/symbols
               test -d /usr/share/kicad/footprints
+
+              # Bootstrap pinned pip into /tmp only; the CLI image omits pip.
+              python3 prototype/native-smoke/bootstrap_pip.py
+              export PYTHONPATH=/tmp/pip-bootstrap
+              python3 -m pip --version
               python3 -m pip install --disable-pip-version-check --no-compile \
                 --target /tmp/native-smoke-python \
                 -r prototype/native-smoke/requirements.txt
