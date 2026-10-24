@@ -99,24 +99,37 @@ jobs:
                 echo "FAIL: Reopened ESP32 schematic ERC reported violations (exit $reference_erc_reopened_status)." >&2
                 exit "$reference_erc_reopened_status"
               fi
-              echo "=== Generate ESPHome YAML from the native verified netlist ==="
-              node prototype/generate-esphome.mjs \
-                examples/esp32-sensor/native/DX_ESP32_Sensor.esphome.yaml \
-                --verified-netlist reports/native-reference/verified-netlist.json
-              cp examples/esp32-sensor/esphome-secrets.example.yaml \
-                examples/esp32-sensor/native/secrets.yaml
-              trap 'rm -f examples/esp32-sensor/native/secrets.yaml' EXIT
-              # Actions image digest is pinned; write it into this run's report.
-              echo "ESPHome image: ghcr.io/esphome/esphome:2026.10.0@sha256:1dff19a59070cdb523b76576cdc74d200f862d43c1407809088855920cf57145" \
-                | tee reports/native-reference/esphome-validation.txt
-              docker run --rm \
-                -v "$GITHUB_WORKSPACE/examples/esp32-sensor/native:/config" \
-                -w /config \
-                ghcr.io/esphome/esphome:2026.10.0@sha256:1dff19a59070cdb523b76576cdc74d200f862d43c1407809088855920cf57145 \
-                config DX_ESP32_Sensor.esphome.yaml \
-                2>&1 | tee -a reports/native-reference/esphome-validation.txt
               echo "PASS: Native ESP32 reference schematic generated, netlisted, ERC-checked, and reopened."
             '
+
+      - name: Generate ESPHome YAML from native verified nets
+        run: |
+          set -euo pipefail
+          node --version
+          node prototype/generate-esphome.mjs \
+            examples/esp32-sensor/native/DX_ESP32_Sensor.esphome.yaml \
+            --verified-netlist reports/native-reference/verified-netlist.json
+          cp examples/esp32-sensor/esphome-secrets.example.yaml \
+            examples/esp32-sensor/native/secrets.yaml
+          echo "ESPHome image: ghcr.io/esphome/esphome:2026.10.0@sha256:1dff19a59070cdb523b76576cdc74d200f862d43c1407809088855920cf57145" \
+            | tee reports/native-reference/esphome-validation.txt
+
+      - name: Validate generated YAML with official ESPHome CLI
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE/examples/esp32-sensor/native:/config" \
+            -w /config \
+            -e HOME=/tmp/esphome-native-validation-home \
+            --entrypoint /bin/sh \
+            ghcr.io/esphome/esphome:2026.10.0@sha256:1dff19a59070cdb523b76576cdc74d200f862d43c1407809088855920cf57145 \
+            -lc 'mkdir -p "$HOME" && esphome version && esphome config DX_ESP32_Sensor.esphome.yaml' \
+            2>&1 | tee -a reports/native-reference/esphome-validation.txt
+
+      - name: Remove schema-validation secrets
+        if: always()
+        run: rm -f examples/esp32-sensor/native/secrets.yaml
 
       - name: Save KiCad reports and manufacturing files
         if: always()
