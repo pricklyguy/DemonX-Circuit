@@ -14,8 +14,10 @@ Native artifact: [download reports, KiCad project, Gerber/Excellon and STEP](htt
 | Electron 45.0.0 local runtime | **PASS** | Project-local Electron 45.0.0; no machine-wide installer, PATH or registry change. |
 | TypeScript build | **PASS** | Node.js 24.19.0, npm 11.17.0; `npm run build` exited 0. |
 | Node/MCP read-only smoke | **PASS, subset only** | `node prototype/smoke.mjs` exercised initialize, tool discovery, annotations, read-only calls, resource read and invalid input. This is not SDK conformance or provider interoperability. |
-| Hosted Windows app launch and screenshot | **PASS** | Refreshed workflow 40062434543 launched Electron, captured the actual renderer at 1034 × 663, and Electron exited 0. Screenshot: [`desktop-preview.png`](desktop-preview.png). |
-| Portable Windows preview ZIP | **PASS, package only** | Workflow artifact `demonx-circuit-windows-preview-0.3.0.zip`, artifact 12548410536. No installer and no KiCad/ESPHome bundled. Owner-machine launch and interactive acceptance remain **NOT TESTED**. |
+| Packaged Windows interaction acceptance | **PASS** | Final Windows 2022 run [40068737957](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40068737957) extracted and launched the 0.4.0 ZIP. Real mouse clicks exercised project creation/reopen, recent projects, theme/settings, fixture actions, tool errors and ESPHome preview. No renderer/preload exceptions. See [`OWNER-ACCEPTANCE.md`](OWNER-ACCEPTANCE.md). |
+| Portable Windows preview ZIP | **PASS** | 0.4.0 artifact [12549989086](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40068737957/artifacts/12549989086), 273,949,939 bytes, 30-day retention. No installer. KiCad and ESPHome remain separately installed. |
+| KiCad editor/CLI and ESPHome CLI on the Windows runner | **NOT TESTED** | The hosted runner detected no KiCad editor, KiCad CLI, or ESPHome CLI. The interface displayed explicit `NOT TESTED` results and helpful installation messages. Actual editor launch, ERC/DRC, Gerber/Excellon/STEP export and ESPHome CLI validation are not claimed by this desktop run. |
+| Owner's Windows computer | **NOT TESTED** | The packaged interaction pass ran on GitHub-hosted Windows 2022. A direct launch from this managed development workspace was blocked by its inherited AppContainer ACL; no machine-wide or system configuration was changed. |
 | Electron launch on this managed Windows host | **FAIL / environment blocker** | Local GPU launch exited `-1073741819` (`0xC0000005`); `--disable-gpu` did not reach `ready`. A minimal Electron app reproduced the startup stall. Hosted Windows succeeded independently. |
 | Reference schematic and netlist | **PASS** | Native workflow placed 23 footprints; verified 16 named nets from KiCad XML; ERC before and after reopen each reported 0 violations, 0 errors, 0 warnings. |
 | Reference PCB routing | **PASS, feasibility only** | FreeRouting 2.5.0 with pinned SHA-256 `f6f51bb02245e8e717f9359bd260cc9c5c0b1bc0acc8b7cb2cd5b8ffeb5de3c7` routed 64 unrouted items to 0 unrouted / 0 router violations. 23 footprints imported into KiCad. |
@@ -58,7 +60,7 @@ KiCad's fixture reports list its standard ignored-check categories (courtyard pr
 
 To run from the source checkout on Windows, install Node.js 24.x, then run `npm ci` and `npm start`. Install KiCad 10.0.7 separately for native editor, ERC/DRC and manufacturing actions; install ESPHome separately for YAML validation. The hosted preview ZIP is a portable application folder, not an installer, and does not include either tool. Linux remains an architectural target but was not tested.
 
-The screenshot is from the actual hosted Windows Electron window after the compact-width layout fix. The workflow also compiled the TypeScript and built the portable ZIP. The package and screenshot exist as separate 30-day GitHub Actions artifacts; its interactions have not yet been exercised on the owner's machine. App buttons that need absent native files/tools return `NOT TESTED`; AI/MCP, Forge and CNC remain unavailable rather than simulated.
+The earlier 0.3.0 screenshot and launch check did not exercise controls. Checkpoint owner acceptance exposed that the classic renderer script was emitted as CommonJS and threw `ReferenceError: exports is not defined` before registering handlers. Version 0.4.0 fixes this and has actual packaged-build mouse-click evidence; the final screenshots are [`desktop-preview.png`](desktop-preview.png) and [`desktop-preview-light.png`](desktop-preview-light.png). The owner's Windows computer still needs its own launch check. App actions that require missing native tools return `NOT TESTED`; AI/MCP, Forge and CNC remain unavailable rather than simulated.
 
 ## Native PCB and component ownership boundaries
 
@@ -70,7 +72,7 @@ The original user component is a generic CC0 2.54 mm 1x02 header. The round-trip
 
 ## Desktop recommendation
 
-The first usable application should remain the **DemonX-owned Electron + TypeScript workflow shell backed by separately installed KiCad**, with KiCad's native schematic and PCB editors providing the canvases. This is a provisional product direction: the hosted Windows app launched and captured, while local managed-host launch failed and owner-machine ZIP interaction is untested. Keep KiCad 10.0.7 provisional, preserve LibrePCB as the documented alternative, and do not fork an EDA editor or expand into new desktop architecture before owners test the preview.
+The first usable application should remain the **DemonX-owned Electron + TypeScript workflow shell backed by separately installed KiCad**, with KiCad's native schematic and PCB editors providing the canvases. The 0.4.0 packaged preview passed interaction acceptance on a hosted Windows 2022 runner. Keep KiCad 10.0.7 provisional, preserve LibrePCB as the documented alternative, and collect owner-machine usability feedback before expanding desktop architecture.
 
 ## Owner review requested
 
@@ -89,6 +91,6 @@ The first usable application should remain the **DemonX-owned Electron + TypeScr
 
 ## Exact next development milestone
 
-Run an owner-led acceptance pass on the portable Windows ZIP and approve the routed fixture for an engineering-layout refinement milestone. First refine and review the regulator placement and power-net sizing, then rerun native DRC/reopen/exports and inspect the assembly STEP models and antenna keepout. In parallel, correct the ESPHome OTA template warning and validate again. Keep the current outputs marked **NOT APPROVED FOR MANUFACTURE**. Do not expand desktop architecture or begin manufacturing approval before this review.
+Have the owner launch the 0.4.0 ZIP on their Windows machine and install KiCad 10.0.7 and ESPHome CLI separately if they want to exercise those native paths. The routed reference fixture still needs engineering-layout refinement: review regulator placement and power-net sizing, then rerun native DRC/reopen/exports and inspect assembly STEP models and antenna keepout. Correct the ESPHome OTA template warning and validate again. Keep all current outputs marked **NOT APPROVED FOR MANUFACTURE**.
 
 No manufacturing approval is requested or implied at this checkpoint.
