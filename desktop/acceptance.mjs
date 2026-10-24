@@ -132,9 +132,20 @@ async function stopPackagedApp(context) {
   markStage(`stop-packaged-app: ${context}`);
   const processToStop = child;
   const exited = new Promise(resolveExit => processToStop.once('exit', () => resolveExit(true)));
-  processToStop.kill();
+  if (process.platform === 'win32') {
+    // Electron starts renderer/GPU subprocesses that can inherit stdout and
+    // stderr handles. Killing only the portable launcher leaves those handles
+    // open and keeps this acceptance Node process alive forever.
+    const killer = spawn('taskkill.exe', ['/PID', String(processToStop.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    await new Promise(resolveKill => {
+      killer.once('error', resolveKill);
+      killer.once('exit', resolveKill);
+    });
+  } else processToStop.kill('SIGTERM');
   const didExit = await Promise.race([exited, sleep(15000).then(() => false)]);
   if (!didExit) throw new Error(`Packaged app did not exit within 15 seconds (${context}).`);
+  processToStop.stdout?.destroy();
+  processToStop.stderr?.destroy();
 }
 async function screenshot(name) {
   const result = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -336,7 +347,11 @@ try {
   socket?.close();
   if (child && child.exitCode === null) {
     try { await stopPackagedApp('acceptance cleanup'); }
-    catch (error) { report.diagnostics.push({ kind: 'packaged-app-cleanup', text: error instanceof Error ? error.message : String(error) }); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      report.diagnostics.push({ kind: 'packaged-app-cleanup', text: message });
+      fail('packaged app exits after acceptance', message);
+    }
   }
   report.endedAt = new Date().toISOString();
   const reportPath = join(artifactDir, 'acceptance-report.json');
@@ -348,5 +363,7 @@ try {
   // remove this explicitly after reviewing the report.
   console.log(`[acceptance] temporary acceptance data retained at ${workDir}`);
   clearTimeout(acceptanceWatchdog);
-  if (report.fatal || report.checks.some(c => c.result === 'FAIL')) process.exitCode = 1;
+  // Do not let a leaked Electron helper process hold the harness open after
+  // the report has been durably written and the main process tree was stopped.
+  process.exit(report.fatal || report.checks.some(c => c.result === 'FAIL') ? 1 : 0);
 }
