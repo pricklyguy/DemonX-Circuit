@@ -1,8 +1,19 @@
-# Checkpoint 2 prototype plan
+# Prototype plan and checkpoint evidence
 
 Checkpoint 1 approval is recorded. Work is isolated on `codex/demonx-circuit-foundation`; no other DemonX repository was changed, no host toolchain was installed, and no merge to `main` was performed.
 
-## Status summary (2026-10-24)
+## Checkpoint 3 status summary (2026-10-24)
+
+| Capability | Result | Evidence and boundary |
+|---|---|---|
+| LED/resistor native smoke | **PASS** | KiCad 10.0.7 project creation, ERC/DRC, Gerber X2/Excellon/STEP export, reopen and repeat checks. |
+| ESP32-S3/BME280/DC relay native fixture | **PASS, feasibility only** | Schematic/netlist, 64 unrouted items routed to 0, ERC and pre-/post-reopen DRC pass; Gerber X2, Excellon and assembly STEP exported. **NOT APPROVED FOR MANUFACTURE.** See [Checkpoint 3 results](../../reports/checkpoint-3/CHECKPOINT-3-RESULTS.md). |
+| KiCad user-owned component round-trip | **PASS** | CC0 source exported, original test workspace deleted, reimported with matching hashes, parsed and reused on a reopened board. Generic test component only. |
+| ESPHome validation | **PASS, schema only** | YAML generated from native netlist GPIO8/9/10 mapping; official ESPHome 2026.10.0 reports valid configuration. No compile/deploy/hardware validation. |
+| Electron desktop preview | **PASS on hosted Windows CI** | TypeScript build, real Electron launch/screenshot and portable ZIP build. Owner-machine interactive acceptance and Linux packaging **NOT TESTED**. KiCad and ESPHome remain separate installs. |
+| AI/MCP provider compatibility | **NOT TESTED** | Existing read-only hand-written subset only; no official SDK or Codex/Claude client interoperability proof. UI shows unavailable. |
+
+## Checkpoint 2 status summary (historical, 2026-10-24)
 
 | Capability | Result | Evidence and boundary |
 |---|---|---|
