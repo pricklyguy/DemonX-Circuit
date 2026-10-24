@@ -55,7 +55,9 @@ def main():
             if previous:
                 failures.append(f"Short: logical nets {previous} and {name} merge as {actual_name}")
             used_net_names[actual_name] = name
-            if actual_name != name:
+            # KiCad names local nets as /<sheet-path>/<label> in XML.
+            effective_name = actual_name.rsplit("/", 1)[-1]
+            if effective_name != name:
                 print(f"NET NAME WARN {name}: connectivity group is {actual_name!r}; labels did not set requested name")
             print(f"NET PASS {name}: {', '.join(sorted(matching[0][1]))}")
     if failures:
