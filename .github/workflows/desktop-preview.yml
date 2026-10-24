@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   windows-preview:
@@ -36,6 +37,15 @@ jobs:
 
       - name: Compile TypeScript renderer and preload
         run: npm run build
+
+      - name: Download the latest verified native fixture output
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: kicad-native-smoke-10.0.7
+          path: build/native-fixture
+          repository: ${{ github.repository }}
+          run-id: 40062064377
+          github-token: ${{ github.token }}
 
       - name: Attempt real Electron renderer capture
         id: capture
@@ -77,6 +87,10 @@ jobs:
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
           Copy-Item prototype "$appRoot/prototype" -Recurse -Force
           Copy-Item examples "$appRoot/examples" -Recurse -Force
+          $nativeFixture = Join-Path (Get-Location).Path "build/native-fixture/examples/esp32-sensor/native"
+          if (-not (Test-Path (Join-Path $nativeFixture "DX_ESP32_Sensor.kicad_pcb"))) { throw "Verified native fixture is missing from the downloaded KiCad artifact: $nativeFixture" }
+          New-Item -ItemType Directory -Force "$appRoot/examples/esp32-sensor/native" | Out-Null
+          Copy-Item "$nativeFixture/*" "$appRoot/examples/esp32-sensor/native/" -Recurse -Force
           @'
           DemonX Circuit Preview 0.3.0
 
@@ -86,6 +100,15 @@ jobs:
           AI/MCP, Forge, and CNC handoffs are not implemented in this preview.
           '@ | Set-Content "$bundle/README.txt"
           Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.3.0.zip -Force
+
+      - name: Run packaged Windows acceptance test against extracted ZIP
+        shell: pwsh
+        run: |
+          $extracted = Join-Path (Get-Location).Path "build/windows-e2e"
+          Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.3.0.zip" -DestinationPath $extracted -Force
+          $appExe = Join-Path $extracted "DemonX-Circuit/DemonX Circuit.exe"
+          if (-not (Test-Path $appExe)) { throw "Packaged executable missing: $appExe" }
+          node desktop/acceptance.mjs $appExe (Join-Path $env:RUNNER_TEMP "desktop-acceptance")
 
       - name: Upload Windows preview and screenshot if available
         if: always()
@@ -106,4 +129,13 @@ jobs:
           name: demonx-circuit-real-window-screenshot-0.3.0
           path: reports/checkpoint-3/desktop-preview.png
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload packaged acceptance report and screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: demonx-circuit-packaged-acceptance
+          path: ${{ runner.temp }}/desktop-acceptance/
+          if-no-files-found: warn
           retention-days: 30

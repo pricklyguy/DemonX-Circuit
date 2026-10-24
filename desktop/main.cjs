@@ -7,6 +7,19 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 
+const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
+if (acceptanceRoot) {
+  const userData = process.env.DEMONX_CIRCUIT_USER_DATA;
+  if (userData) app.setPath('userData', path.resolve(userData));
+  const actualShowOpenDialog = dialog.showOpenDialog.bind(dialog);
+  dialog.showOpenDialog = async (parent, options = {}) => {
+    if (options.title === 'Choose a parent folder for the new project') return { canceled: false, filePaths: [path.resolve(acceptanceRoot)] };
+    if (options.title === 'Open DemonX Circuit Project') return { canceled: false, filePaths: [path.join(path.resolve(acceptanceRoot), 'DemonX-Circuit-Project')] };
+    return actualShowOpenDialog(parent, options);
+  };
+  dialog.showMessageBox = async () => ({ response: 0 });
+}
+
 process.on('uncaughtException', error => { console.error('[Circuit main] uncaught exception', error); });
 process.on('unhandledRejection', error => { console.error('[Circuit main] unhandled rejection', error); });
 
@@ -259,7 +272,13 @@ register('esphome:save', async (yaml, replaceApproved, approvedDestination) => {
 });
 
 async function createWindow() {
-  win = new BrowserWindow({ width: 1360, height: 880, minWidth: 1050, minHeight: 700, backgroundColor: '#10151c', title: 'DemonX Circuit', webPreferences: { preload: path.join(__dirname, 'dist', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  const preloadPath = path.join(__dirname, 'dist', 'preload.js');
+  console.log(`[Circuit main] packaged=${app.isPackaged}; appPath=${app.getAppPath()}; preload=${preloadPath}; preloadExists=${require('node:fs').existsSync(preloadPath)}`);
+  win = new BrowserWindow({ width: 1360, height: 880, minWidth: 1050, minHeight: 700, backgroundColor: '#10151c', title: 'DemonX Circuit', webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  win.webContents.on('console-message', (_event, ...details) => console.error('[Circuit renderer console]', ...details));
+  win.webContents.on('preload-error', (_event, preload, error) => console.error('[Circuit preload error]', preload, error));
+  win.webContents.on('did-fail-load', (_event, code, description, url) => console.error('[Circuit load error]', code, description, url));
+  win.webContents.on('render-process-gone', (_event, details) => console.error('[Circuit renderer process gone]', details));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   await win.loadFile(path.join(__dirname, 'index.html'));

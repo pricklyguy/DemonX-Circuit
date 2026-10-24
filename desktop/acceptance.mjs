@@ -1,0 +1,163 @@
+#!/usr/bin/env node
+// Launches the extracted portable Windows package and drives its real renderer
+// through Chromium DevTools Protocol. Native file dialogs are redirected to a
+// fresh temporary project root in the test process only; project creation and
+// manifest I/O still run through the packaged app's normal main-process code.
+import { spawn } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+
+const executable = resolve(process.argv[2] || '');
+if (!process.argv[2]) throw new Error('Usage: node desktop/acceptance.mjs <portable-exe> <artifact-dir>');
+const artifactDir = resolve(process.argv[3] || 'reports/desktop-acceptance');
+await mkdir(artifactDir, { recursive: true });
+const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
+const projectRoot = join(workDir, 'projects');
+const userData = join(workDir, 'user-data');
+await mkdir(projectRoot, { recursive: true });
+const port = 24000 + Math.floor(Math.random() * 12000);
+const report = { executable: basename(executable), checks: [], diagnostics: [], screenshots: [], unhandled: [] };
+let child;
+let socket;
+let nextId = 1;
+const pending = new Map();
+
+function pass(name, evidence) { report.checks.push({ name, result: 'PASS', evidence }); }
+function fail(name, evidence) { report.checks.push({ name, result: 'FAIL', evidence }); }
+function check(name, condition, evidence) { condition ? pass(name, evidence) : fail(name, evidence); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function getTarget() {
+  const end = Date.now() + 30000;
+  while (Date.now() < end) {
+    if (child?.exitCode !== null && child?.exitCode !== undefined) throw new Error(`Packaged app exited early with ${child.exitCode}`);
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`);
+      if (response.ok) {
+        const pages = (await response.json()).filter(t => t.type === 'page' && t.webSocketDebuggerUrl);
+        const page = pages.find(t => t.url.includes('desktop/index.html')) || pages.find(t => t.url.startsWith('file:'));
+        if (page) return page;
+      }
+    } catch {}
+    await sleep(250);
+  }
+  throw new Error('Packaged Electron did not expose a renderer debugging target.');
+}
+async function connect(url) {
+  socket = new WebSocket(url);
+  await new Promise((resolveOpen, reject) => {
+    socket.addEventListener('open', resolveOpen, { once: true });
+    socket.addEventListener('error', reject, { once: true });
+  });
+  socket.addEventListener('message', async event => {
+    const raw = typeof event.data === 'string' ? event.data : await event.data.text();
+    const message = JSON.parse(raw);
+    if (message.id && pending.has(message.id)) {
+      const { resolve: finish, reject } = pending.get(message.id);
+      pending.delete(message.id);
+      if (message.error) reject(new Error(JSON.stringify(message.error)));
+      else finish(message.result || {});
+    } else if (message.method) {
+      if (message.method === 'Runtime.exceptionThrown') report.unhandled.push({ kind: 'renderer-exception', detail: message.params.exceptionDetails?.text || message.params.exceptionDetails?.exception?.description || 'unknown renderer exception' });
+      if (message.method === 'Log.entryAdded' && ['error', 'warning'].includes(message.params.entry.level)) report.diagnostics.push({ kind: 'renderer-log', level: message.params.entry.level, text: message.params.entry.text });
+      if (message.method === 'Network.loadingFailed') report.diagnostics.push({ kind: 'resource-load-failed', text: message.params.errorText, blockedReason: message.params.blockedReason || null });
+    }
+  });
+}
+function cdp(method, params = {}, timeout = 10000) {
+  const id = nextId++;
+  return new Promise((resolveReply, reject) => {
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Timed out waiting for CDP ${method}`)); }, timeout);
+    pending.set(id, { resolve: value => { clearTimeout(timer); resolveReply(value); }, reject: error => { clearTimeout(timer); reject(error); } });
+    socket.send(JSON.stringify({ id, method, params }));
+  });
+}
+async function evaluate(expression, timeout = 10000) {
+  const response = await cdp('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeout);
+  if (response.exceptionDetails) throw new Error(response.exceptionDetails.text || 'Renderer evaluation failed');
+  return response.result?.value;
+}
+async function waitUntil(expression, description, timeout = 10000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    try { const value = await evaluate(expression, 2000); if (value) return value; } catch {}
+    await sleep(100);
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+async function click(id) {
+  const rect = await evaluate(`(() => { const e = document.getElementById(${JSON.stringify(id)}); if (!e) return null; const r = e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,disabled:!!e.disabled}; })()`);
+  if (!rect) throw new Error(`Missing visible control #${id}`);
+  if (rect.disabled) throw new Error(`Control #${id} is disabled`);
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+}
+async function screenshot(name) {
+  const result = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  const path = join(artifactDir, name);
+  await writeFile(path, Buffer.from(result.data, 'base64'));
+  report.screenshots.push(path);
+}
+async function launch() {
+  child = spawn(executable, [`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=${port}`, '--circuit-acceptance'], {
+    cwd: dirname(executable), windowsHide: true,
+    env: { ...process.env, DEMONX_CIRCUIT_ACCEPTANCE_ROOT: projectRoot, DEMONX_CIRCUIT_USER_DATA: userData }
+  });
+  child.stdout.on('data', b => report.diagnostics.push({ kind: 'main-stdout', text: String(b).trim() }));
+  child.stderr.on('data', b => report.diagnostics.push({ kind: 'main-stderr', text: String(b).trim() }));
+  const target = await getTarget();
+  await connect(target.webSocketDebuggerUrl);
+  await cdp('Runtime.enable'); await cdp('Page.enable'); await cdp('Log.enable'); await cdp('Network.enable');
+  await cdp('Page.reload', { ignoreCache: true });
+  await waitUntil(`document.readyState === 'complete'`, 'packaged page load');
+}
+
+try {
+  await launch();
+  const appPath = await evaluate('location.pathname');
+  const preload = await evaluate(`({bridge:typeof window.circuit, script:[...document.scripts].map(s=>s.getAttribute('src')), title:document.title})`);
+  report.diagnostics.push({ kind: 'renderer-startup', appPath, ...preload });
+  check('packaged renderer and preload bridge', preload.bridge === 'object', JSON.stringify(preload));
+  await screenshot('desktop-dark.png');
+
+  await click('theme-toggle');
+  const themeAfterClick = await waitUntil(`document.body.dataset.theme === 'light'`, 'light mode after clicking theme control', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
+  check('theme button responds', themeAfterClick === true, JSON.stringify(themeAfterClick));
+  await screenshot('desktop-light.png');
+
+  await click('new-project');
+  const created = await waitUntil(`document.getElementById('project-state')?.textContent === 'OPEN'`, 'new project creation through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
+  let manifest = null;
+  try { manifest = JSON.parse(await readFile(join(projectRoot, 'DemonX-Circuit-Project', 'project.json'), 'utf8')); } catch {}
+  check('New Project creates a real project.json', manifest?.format === 'demonx-project', JSON.stringify({ created, projectId: manifest?.projectId }));
+
+  if (manifest) {
+    await click('open-project');
+    const reopened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening the created project through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
+    check('Open Project reopens the created project', reopened === manifest.projectId, JSON.stringify(reopened));
+  } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
+
+  await child.kill();
+  await new Promise(resolveExit => child.once('exit', resolveExit));
+  socket?.close(); socket = undefined;
+  await launch();
+  const persistedTheme = await evaluate('document.body.dataset.theme || "dark"');
+  check('theme preference persists across packaged-app restart', persistedTheme === 'light', `Restarted theme=${persistedTheme}`);
+  await screenshot('desktop-light-restarted.png');
+
+  if (report.unhandled.length) fail('zero renderer/preload exceptions', JSON.stringify(report.unhandled));
+  else pass('zero renderer/preload exceptions', 'No CDP Runtime exceptions were observed during startup or tested clicks.');
+} catch (error) {
+  report.fatal = error instanceof Error ? error.stack : String(error);
+  report.diagnostics.push({ kind: 'acceptance-runner-failure', text: report.fatal });
+} finally {
+  socket?.close();
+  if (child && child.exitCode === null) { child.kill(); await new Promise(resolveExit => child.once('exit', resolveExit)); }
+  report.endedAt = new Date().toISOString();
+  const reportPath = join(artifactDir, 'acceptance-report.json');
+  await writeFile(reportPath, JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
+  await rm(workDir, { recursive: true, force: true });
+  if (report.fatal || report.checks.some(c => c.result === 'FAIL')) process.exitCode = 1;
+}
