@@ -53,6 +53,7 @@ jobs:
               export PYTHONPATH=/tmp/pip-bootstrap
               python3 -m pip --version
               python3 -m pip install --disable-pip-version-check --no-compile \
+                --retries 5 --timeout 30 \
                 --target /tmp/native-smoke-python \
                 -r prototype/native-smoke/requirements.txt
               NATIVE_SMOKE_PYTHONPATH=/tmp/native-smoke-python \

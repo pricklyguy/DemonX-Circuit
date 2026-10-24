@@ -15,6 +15,12 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECT_DIR = ROOT / "examples" / "esp32-sensor" / "native"
 PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 PROJECT = PROJECT_DIR / "DX_ESP32_Sensor"
+GRID_MM = 1.27
+
+
+def grid_position(position):
+    """Snap schematic placements to KiCad's 50 mil grid."""
+    return tuple(round(value / GRID_MM) * GRID_MM for value in position)
 
 for suffix in (".kicad_pro", ".kicad_sch", ".kicad_pcb"):
     target = PROJECT.with_suffix(suffix)
@@ -33,12 +39,14 @@ components = [
     ("Device:C", "C3", "22uF output", (91, 45), "Capacitor_SMD:C_0805_2012Metric"),
     ("Device:C", "C4", "22uF output", (101, 45), "Capacitor_SMD:C_0805_2012Metric"),
     ("Device:C", "C5", "100nF BME280", (144, 45), "Capacitor_SMD:C_0603_1608Metric"),
+    ("Device:C", "C6", "1uF EN delay", (61, 119), "Capacitor_SMD:C_0603_1608Metric"),
     ("Device:R", "R1", "33.2k VFB high", (78, 68), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R2", "10k VFB low", (91, 68), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R3", "4.7k SDA pullup", (127, 79), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R4", "4.7k SCL pullup", (140, 79), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R5", "330R base", (113, 101), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R6", "100k base pulldown", (124, 101), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R7", "10k EN pullup", (74, 119), "Resistor_SMD:R_0603_1608Metric"),
     ("Transistor_BJT:MMBT2222A", "Q1", "MMBT2222ALT1G", (140, 101), "Package_TO_SOT_SMD:SOT-23"),
     ("Diode:MMSD4148", "D1", "MMSD4148T1G", (156, 101), "Diode_SMD:D_SOD-123"),
     ("Relay:G5V-1", "K1", "G5V-1-DC5 (low-voltage DC only)", (177, 94), "Relay_THT:Relay_SPDT_Omron_G5V-1"),
@@ -51,8 +59,8 @@ components = [
 # contact map is translated and independently reviewed against the footprint.
 net_pins = {
     "+5V_IN": [("J1", "1"), ("U3", "3"), ("U3", "5"), ("C1", "1"), ("K1", "2"), ("D1", "1")],
-    "+3V3": [("L1", "2"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("U1", "2"), ("U2", "2"), ("U2", "6"), ("U2", "8"), ("R1", "1"), ("R3", "1"), ("R4", "1")],
-    "GND": [("J1", "2"), ("U3", "1"), ("C1", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"), ("U1", "1"), ("U1", "40"), ("U1", "41"), ("U2", "1"), ("U2", "5"), ("U2", "7"), ("R2", "2"), ("R6", "2"), ("Q1", "2")],
+    "+3V3": [("L1", "2"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("U1", "2"), ("U2", "2"), ("U2", "6"), ("U2", "8"), ("R1", "1"), ("R3", "1"), ("R4", "1"), ("R7", "1")],
+    "GND": [("J1", "2"), ("U3", "1"), ("C1", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"), ("C6", "2"), ("U1", "1"), ("U1", "40"), ("U1", "41"), ("U2", "1"), ("U2", "5"), ("U2", "7"), ("R2", "2"), ("R6", "2"), ("Q1", "2")],
     "SW": [("U3", "2"), ("L1", "1"), ("C2", "1")],
     "VBST": [("U3", "6"), ("C2", "2")],
     "VFB": [("U3", "4"), ("R1", "2"), ("R2", "1")],
@@ -61,6 +69,7 @@ net_pins = {
     "RELAY_GPIO": [("U1", "18"), ("R5", "1")],
     "RELAY_BASE": [("R5", "2"), ("Q1", "1"), ("R6", "1")],
     "RELAY_COIL_LOW": [("K1", "9"), ("Q1", "3"), ("D1", "2")],
+    "EN": [("U1", "3"), ("R7", "2"), ("C6", "1")],
 }
 
 schematic = ksa.create_schematic("DX_ESP32_Sensor")
@@ -69,7 +78,7 @@ for lib_id, reference, value, position, footprint in components:
         lib_id=lib_id,
         reference=reference,
         value=value,
-        position=position,
+        position=grid_position(position),
         footprint=footprint,
     )
 
@@ -92,7 +101,7 @@ for reference, position, net_name in (
         lib_id="power:PWR_FLAG",
         reference=reference,
         value="PWR_FLAG",
-        position=position,
+        position=grid_position(position),
     )
     pin_position = schematic.get_component_pin_position(reference, "1")
     if pin_position is None:

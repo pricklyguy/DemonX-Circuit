@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import pathlib
+import time
 import urllib.request
 import zipfile
 
@@ -14,7 +15,23 @@ EXPECTED_SHA256 = "6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953
 METADATA_URL = f"https://pypi.org/pypi/pip/{VERSION}/json"
 
 
-metadata = json.load(urllib.request.urlopen(METADATA_URL, timeout=30))
+def fetch(url, timeout, attempts=4):
+    """Retry transient TLS/network failures without writing outside /tmp."""
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                return response.read()
+        except (OSError, TimeoutError) as error:
+            last_error = error
+            if attempt + 1 < attempts:
+                delay = 2 ** attempt
+                print(f"Temporary download failure ({error}); retrying in {delay}s", flush=True)
+                time.sleep(delay)
+    raise last_error
+
+
+metadata = json.loads(fetch(METADATA_URL, timeout=30))
 wheel = next(
     item for item in metadata["urls"]
     if item["filename"] == f"pip-{VERSION}-py3-none-any.whl"
@@ -22,8 +39,7 @@ wheel = next(
 if wheel["digests"]["sha256"] != EXPECTED_SHA256:
     raise SystemExit("Unexpected published pip wheel checksum")
 
-with urllib.request.urlopen(wheel["url"], timeout=60) as response:
-    archive = response.read()
+archive = fetch(wheel["url"], timeout=60)
 if hashlib.sha256(archive).hexdigest() != EXPECTED_SHA256:
     raise SystemExit("pip wheel checksum verification failed")
 
