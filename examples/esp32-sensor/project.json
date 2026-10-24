@@ -11,36 +11,37 @@
       "model": "ESP32-S3-WROOM-1-N8",
       "mcu": "ESP32-S3",
       "esphomeVariant": "esp32s3",
-      "profileSource": "Explicit reference target selected for this feasibility fixture; not a routed/native EDA design",
-      "pinMapStatus": "logical-example-only; confirm native schematic and pin constraints before manufacture or firmware"
+      "profileSource": "Espressif ESP32-S3-WROOM-1 datasheet; N8 module variant; fixture design record",
+      "pinMapStatus": "candidate mapping for native schematic; firmware generation remains gated on native connectivity and ERC/DRC evidence"
     },
     "designIntent": {
       "inputSupply": "5V DC, low-voltage only",
-      "logicSupply": "3.3V regulated; regulator must support ESP32-S3 module peak current with margin",
+      "logicSupply": "3.3V regulated from 5V using TI TPS563201 synchronous buck (4.5-17V input, 3A rating); final thermal/layout and transient suitability still require review",
       "sensor": "Bare BME280 on I2C; CSB tied to VDDIO, SDO to GND (address 0x76), SDA/SCL pull-ups and local decoupling required",
-      "relay": "Omron G5V-1 DC5 coil via low-side logic-level transistor/MOSFET driver, gate/base pulldown and flyback diode; contacts are explicitly for low-voltage DC only",
+      "relay": "Omron G5V-1-DC5 30mA coil via onsemi MMBT2222ALT1G low-side driver; 330 ohm base resistor, 100k base-emitter pulldown and 1N4148 flyback diode; contacts are low-voltage DC only",
       "mainsRouting": false,
-      "status": "design-intent-only; no component-level schematic, netlist, PCB, ERC, or DRC exists"
+      "status": "manufacturer-sourced component candidates selected; native schematic and PCB fixture not yet created; no complete electrical review"
     },
     "components": [
       { "ref": "U1", "kind": "controller-module", "value": "ESP32-S3-WROOM-1-N8", "pins": ["3V3", "GND", "GPIO8", "GPIO9", "GPIO10"] },
       { "ref": "U2", "kind": "sensor-ic", "value": "Bosch BME280", "address": "0x76", "pins": ["VDD", "VDDIO", "GND", "SDA", "SCL", "CSB", "SDO"] },
       { "ref": "K1", "kind": "relay", "value": "Omron G5V-1 DC5", "pins": ["COIL+", "COIL-", "COM", "NO", "NC"], "loadUse": "low-voltage DC only; no mains" },
-      { "ref": "Q1", "kind": "relay-driver", "value": "Logic-level low-side transistor/MOSFET; exact part TBD" },
-      { "ref": "D1", "kind": "flyback-diode", "value": "Coil suppression; exact part TBD" }
+      { "ref": "Q1", "kind": "relay-driver", "value": "onsemi MMBT2222ALT1G", "footprint": "SOT-23" },
+      { "ref": "D1", "kind": "flyback-diode", "value": "onsemi MMSD4148T1G", "role": "SOD-123; across 5V relay coil; cathode to +5V, anode to transistor collector" },
+      { "ref": "U3", "kind": "buck-regulator", "value": "TI TPS563201", "output": "3.3V", "inductor": "2.2uH", "feedback": "33.2k/10.0k per TI reference design" }
     ],
     "nets": [
       { "name": "3V3_LOGIC", "connections": ["U1.3V3", "U2.VDD", "U2.VDDIO"], "status": "design-intent-only; add local decoupling" },
       { "name": "GND", "connections": ["U1.GND", "U2.GND", "Q1.SOURCE_OR_EMITTER"] },
       { "name": "I2C_SDA", "connections": ["U1.GPIO8", "U2.SDA"], "pullup": "4.7k to 3V3_LOGIC" },
       { "name": "I2C_SCL", "connections": ["U1.GPIO9", "U2.SCL"], "pullup": "4.7k to 3V3_LOGIC" },
-      { "name": "RELAY_DRIVER", "connections": ["U1.GPIO10", "Q1.GATE_OR_BASE"], "seriesResistor": "TBD", "pulldown": "TBD" },
+      { "name": "RELAY_DRIVER", "connections": ["U1.GPIO10", "RBASE.1"], "seriesResistor": "330 ohm", "pulldown": "RPD 100k from Q1 base to emitter" },
       { "name": "RELAY_COIL_SUPPLY", "connections": ["K1.COIL+", "5V_DC"], "suppression": "D1 across coil; polarity to be verified" },
       { "name": "RELAY_COIL_SWITCH", "connections": ["K1.COIL-", "Q1.DRAIN_OR_COLLECTOR"] },
       { "name": "BME280_ADDRESS", "connections": ["U2.SDO", "GND"], "value": "0x76" },
       { "name": "BME280_MODE", "connections": ["U2.CSB", "3V3_LOGIC"], "value": "I2C" }
     ],
-    "pinMap": { "I2C_SDA": "GPIO8", "I2C_SCL": "GPIO9", "RELAY_DRIVER": "GPIO10", "status": "explicit firmware example only; unverified until a native design passes ERC/DRC" }
+    "pinMap": { "I2C_SDA": "GPIO8", "I2C_SCL": "GPIO9", "RELAY_DRIVER": "GPIO10", "status": "candidate fixture map selected from ESP32-S3 GPIOs; native schematic assignment and ESPHome config validation required before release" }
   },
   "firmware": {
     "target": "esphome",

@@ -1,0 +1,64 @@
+name: ESPHome reference validation (2026.10.0)
+
+on:
+  push:
+    branches:
+      - codex/demonx-circuit-foundation
+    paths:
+      - ".github/workflows/esphome-reference-validation.yml"
+      - "examples/esp32-sensor/**"
+      - "prototype/generate-esphome.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  esphome-config:
+    runs-on: ubuntu-24.04
+    env:
+      ESPHOME_IMAGE: ghcr.io/esphome/esphome:2026.10.0
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generate starter YAML from explicit project pin map
+        run: |
+          set -euo pipefail
+          node --version
+          mkdir -p reports/esphome-validation
+          node prototype/generate-esphome.mjs reports/esphome-validation/dx-esp32-sensor.generated.yaml
+          # Safe schema-validation-only secrets; never uploaded with logs/artifacts.
+          cat > reports/esphome-validation/secrets.yaml <<'EOF'
+          wifi_ssid: "validation-placeholder"
+          wifi_password: "validation-placeholder"
+          api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          ota_password: "validation-placeholder"
+          fallback_ap_password: "validation-placeholder"
+          EOF
+
+      - name: Validate with official ESPHome image
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/config" \
+            -w /config/reports/esphome-validation \
+            -e HOME=/tmp/esphome-validation-home \
+            --entrypoint /bin/sh \
+            "$ESPHOME_IMAGE" \
+            -lc 'mkdir -p "$HOME" && esphome version && esphome config dx-esp32-sensor.generated.yaml'
+
+      - name: Record validation artifact without local secrets
+        if: always()
+        run: |
+          rm -f reports/esphome-validation/secrets.yaml
+
+      - name: Upload generated YAML and validation output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: esphome-reference-validation-2026.10.0
+          path: reports/esphome-validation/dx-esp32-sensor.generated.yaml
+          if-no-files-found: warn
+          retention-days: 30
