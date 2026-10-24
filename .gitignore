@@ -1,0 +1,8 @@
+# Keep credentials and local tool/build state out of version control.
+**/secrets.yaml
+**/*.bak
+.venv/
+**/.esphome/
+build/
+dist/
+exports/

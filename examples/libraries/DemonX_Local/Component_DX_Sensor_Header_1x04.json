@@ -1,0 +1,22 @@
+{
+  "format": "demonx-component",
+  "formatVersion": "0.1.0",
+  "id": "DemonX_Local:Sensor_Header_1x04",
+  "name": "Sensor Header 1x04",
+  "description": "User-owned 2.54 mm, single-row four-pin header placeholder for sensor breakouts.",
+  "owner": "local-user",
+  "license": "CC0-1.0",
+  "status": "metadata-only; not imported into an EDA engine",
+  "pins": [
+    { "number": "1", "name": "VCC", "electricalType": "power_in" },
+    { "number": "2", "name": "GND", "electricalType": "power_in" },
+    { "number": "3", "name": "SDA", "electricalType": "bidirectional" },
+    { "number": "4", "name": "SCL", "electricalType": "bidirectional" }
+  ],
+  "footprint": {
+    "nativeLibrary": "KiCad Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "bundled": false,
+    "reason": "Prototype references an upstream footprint; user library export must declare this dependency."
+  },
+  "provenance": { "createdBy": "DemonX Circuit feasibility fixture", "source": "original metadata; footprint reference is upstream" }
+}
