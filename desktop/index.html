@@ -10,7 +10,7 @@
 <body>
   <div class="app-shell">
     <aside class="rail" aria-label="DemonX Suite">
-      <img class="brand-mark" src="./assets/dx-mark.png" alt="DemonX Suite mark">
+      <img class="brand-mark" src="./assets/DemonX_Glowing_Board_256.png" alt="DemonX Circuit icon">
       <span class="rail-label">CIRCUIT</span>
       <button id="theme-toggle" class="icon-button" title="Toggle theme" aria-label="Toggle theme">◐</button>
       <button id="settings-open" class="icon-button" title="Settings" aria-label="Settings">⚙</button>
@@ -19,7 +19,7 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div class="brand-heading"><div class="eyebrow">DEMONX SUITE <span>/</span> HARDWARE</div><h1>DemonX Circuit</h1></div>
+        <div class="brand-heading"><div class="eyebrow">DEMONX SUITE <span>/</span> HARDWARE</div><img class="brand-wordmark" src="./assets/DemonX Circuit.png" alt="DemonX Circuit"></div>
         <div class="top-actions">
           <span id="engine-status" class="status-pill" role="status"><i></i> Checking tools…</span>
           <button id="open-project" class="button secondary">Open Project</button>
@@ -79,10 +79,10 @@
           </section>
         </aside>
       </section>
-      <footer><span>Preview 0.4.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
+      <footer><span>Preview 0.4.1 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
     </main>
   </div>
-  <dialog id="settings-dialog" class="modal settings-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2></div><button class="close-button" aria-label="Close">×</button></div><section class="setting-row"><div><strong>Appearance</strong><p>Choose the theme for this computer.</p></div><button id="settings-theme-toggle" class="button secondary" type="button">Toggle theme</button></section><section class="setting-row tool-settings"><div><strong>Tool availability</strong><p id="settings-tools">Checking installed tools…</p></div></section><section class="setting-row"><div><strong>Brand assets</strong><p>Shared DemonX Suite DX mark and copper/teal palette.</p></div><span class="tag">LOCAL</span></section><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
+  <dialog id="settings-dialog" class="modal settings-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2></div><button class="close-button" aria-label="Close">×</button></div><section class="setting-row"><div><strong>Appearance</strong><p>Choose the theme for this computer.</p></div><button id="settings-theme-toggle" class="button secondary" type="button">Toggle theme</button></section><section class="setting-row tool-settings"><div><strong>Tool availability</strong><p id="settings-tools">Checking installed tools…</p></div></section><section class="setting-row"><div><strong>Brand assets</strong><p>Official DemonX Circuit artwork. Other DemonX Suite artwork remains available in the repository assets folder.</p></div><span class="tag">LOCAL</span></section><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="result-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div id="result-kicker" class="eyebrow">OPERATION RESULT</div><h2 id="result-title">Result</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="result-message"></p><pre id="result-output" class="output"></pre><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>

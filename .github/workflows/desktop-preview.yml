@@ -7,6 +7,10 @@ on:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
       - "desktop/assets/**"
+      - "assets/DemonX_wordmarks/DemonX Circuit.png"
+      - "assets/DemonX_Icons/DemonX_Circuit/DemonX_Glowing_Board.ico"
+      - "assets/DemonX_Icons/DemonX_Circuit/DemonX_Glowing_Board_256.png"
+      - "assets/DemonX_Icons/DemonX_Circuit/DemonX_Glowing_Board_512.png"
       - "package.json"
       - "package-lock.json"
       - "prototype/generate-esphome.mjs"
@@ -70,20 +74,20 @@ jobs:
           New-Item -ItemType Directory -Force "$appRoot/examples/esp32-sensor/native" | Out-Null
           Copy-Item "$nativeFixture/*" "$appRoot/examples/esp32-sensor/native/" -Recurse -Force
           @'
-          DemonX Circuit Preview 0.4.0
+          DemonX Circuit Preview 0.4.1
 
           Launch with "DemonX Circuit.exe". This portable preview does not install software or modify PATH/registry.
           KiCad 10.0.7 must be installed separately for native schematic, PCB, ERC/DRC, and manufacturing operations.
           ESPHome CLI must be installed separately to validate the generated YAML. This preview does not deploy firmware.
           AI/MCP, Forge, and CNC handoffs are not implemented in this preview.
           '@ | Set-Content "$bundle/README.txt"
-          Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.4.0.zip -Force
+          Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.4.1.zip -Force
 
       - name: Run packaged Windows acceptance test against extracted ZIP
         shell: pwsh
         run: |
           $extracted = Join-Path (Get-Location).Path "build/windows-e2e"
-          Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.4.0.zip" -DestinationPath $extracted -Force
+          Expand-Archive -Path "build/DemonX-Circuit-Windows-Preview-0.4.1.zip" -DestinationPath $extracted -Force
           $exeCandidates = @(Get-ChildItem -LiteralPath $extracted -Filter "DemonX Circuit.exe" -File -Recurse)
           if ($exeCandidates.Count -ne 1) { throw "Expected one packaged executable, found $($exeCandidates.Count)." }
           $appExe = $exeCandidates[0].FullName
@@ -104,9 +108,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: demonx-circuit-windows-preview-0.4.0
+          name: demonx-circuit-windows-preview-0.4.1
           path: |
-            build/DemonX-Circuit-Windows-Preview-0.4.0.zip
+            build/DemonX-Circuit-Windows-Preview-0.4.1.zip
           if-no-files-found: warn
           retention-days: 30
 

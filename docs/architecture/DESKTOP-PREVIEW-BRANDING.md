@@ -1,6 +1,6 @@
 # Desktop preview branding provenance
 
-The preview follows the shared dark/light UI palette used by DemonX Forge and DemonX Design-CNC. It reuses the existing DX mark from `DemonX-Design-CNC/design/public/dx-mark.png`, copied into this repository as `desktop/assets/dx-mark.png`. Circuit uses a text wordmark and does not copy the Forge application logo or implementation.
+The desktop preview uses the official Circuit wordmark at `assets/DemonX_wordmarks/DemonX Circuit.png` and Circuit icon assets from `assets/DemonX_Icons/DemonX_Circuit/`. The application copies only the wordmark, Windows ICO and 512px Linux PNG into its own relative runtime asset folder; other Suite artwork remains available under root `assets/` without being loaded by the UI. Artwork is not recolored, cropped, or recreated. The surrounding interface provides dark and light contrast using the existing copper/teal palette.
 
 | Token | Dark | Light |
 |---|---|---|

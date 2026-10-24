@@ -325,7 +325,8 @@ async function createWindow() {
   nativeTheme.themeSource = prefs.theme === 'light' ? 'light' : 'dark';
   const preloadPath = path.join(__dirname, 'dist', 'preload.js');
   console.log(`[Circuit main] packaged=${app.isPackaged}; appPath=${app.getAppPath()}; preload=${preloadPath}; preloadExists=${require('node:fs').existsSync(preloadPath)}`);
-  win = new BrowserWindow({ width: 1120, height: 720, minWidth: 860, minHeight: 600, backgroundColor: '#0f1519', title: 'DemonX Circuit', webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  const iconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'DemonX_Glowing_Board.ico' : 'DemonX_Glowing_Board_512.png');
+  win = new BrowserWindow({ width: 1120, height: 720, minWidth: 860, minHeight: 600, backgroundColor: '#0f1519', title: 'DemonX Circuit', icon: iconPath, webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   win.webContents.on('console-message', (_event, ...details) => console.error('[Circuit renderer console]', ...details));
   win.webContents.on('preload-error', (_event, preload, error) => console.error('[Circuit preload error]', preload, error));
   win.webContents.on('did-fail-load', (_event, code, description, url) => console.error('[Circuit load error]', code, description, url));

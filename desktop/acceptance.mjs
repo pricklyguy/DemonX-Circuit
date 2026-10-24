@@ -147,6 +147,12 @@ try {
   check('dashboard shows KiCad and ESPHome availability', toolUi.kicad === (detected.kicad ? 'AVAILABLE' : 'NOT FOUND') && toolUi.esphome === (detected.esphome ? 'AVAILABLE' : 'NOT FOUND'), JSON.stringify(toolUi));
   const initialTheme = await evaluate('document.body.dataset.theme');
   check('packaged app starts in its stored theme', initialTheme === 'dark' || initialTheme === 'light', `Initial theme=${initialTheme}`);
+  const wordmark = await evaluate(`(() => { const image = document.querySelector('.brand-wordmark'); return image && {src:image.getAttribute('src'),complete:image.complete,width:image.naturalWidth,height:image.naturalHeight,alt:image.alt}; })()`);
+  check('official Circuit wordmark loads in packaged renderer', wordmark?.src === './assets/DemonX Circuit.png' && wordmark.complete && wordmark.width === 2172 && wordmark.height === 724 && wordmark.alt === 'DemonX Circuit', JSON.stringify(wordmark));
+  const appMark = await evaluate(`(() => { const image = document.querySelector('.brand-mark'); return image && {src:image.getAttribute('src'),complete:image.complete,width:image.naturalWidth,height:image.naturalHeight,alt:image.alt}; })()`);
+  check('official Circuit DX artwork loads in packaged renderer', appMark?.src === './assets/DemonX_Glowing_Board_256.png' && appMark.complete && appMark.width === 256 && appMark.height === 256 && appMark.alt === 'DemonX Circuit icon', JSON.stringify(appMark));
+  const packagedAssets = ['DemonX Circuit.png', 'DemonX_Glowing_Board.ico', 'DemonX_Glowing_Board_256.png', 'DemonX_Glowing_Board_512.png'].map(name => ({ name, exists: existsSync(join(dirname(executable), 'resources', 'app', 'desktop', 'assets', name)) }));
+  check('official window icon assets are packaged for Windows and Linux', packagedAssets.every(asset => asset.exists), JSON.stringify(packagedAssets));
   await screenshot(`desktop-${initialTheme}.png`);
 
   await click('theme-toggle');

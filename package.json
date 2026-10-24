@@ -1,10 +1,12 @@
 {
   "name": "demonx-circuit-preview",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "main": "desktop/main.cjs",
   "description": "DemonX Circuit desktop preview",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "tsc -p desktop/tsconfig.json",
     "postinstall": "node node_modules/electron/install.js",
