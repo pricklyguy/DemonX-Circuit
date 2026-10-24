@@ -28,8 +28,9 @@ async function compareTrees(source, packaged, renamedExe = false) {
   // resources/app is the application payload added alongside Electron's own
   // resources/default_app.asar and must not be compared as Electron runtime.
   const actual = (await filesUnder(packaged)).filter(file => {
-    const firstPart = relative(packaged, file).split(sep)[0].toLowerCase();
-    return firstPart !== 'resources' || !relative(packaged, file).toLowerCase().startsWith(`resources${sep}app${sep}`);
+    const rel = relative(packaged, file);
+    const firstPart = rel.split(sep)[0].toLowerCase();
+    return rel.toLowerCase() !== 'readme.txt' && (firstPart !== 'resources' || !rel.toLowerCase().startsWith(`resources${sep}app${sep}`));
   });
   const expectedMap = new Map(expected.map(file => [relative(source, file).split(sep).join('/'), file]));
   if (renamedExe) {

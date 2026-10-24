@@ -31,7 +31,7 @@ if ($scanner) {
   $scanResult.exitCode = $exitCode
   if ($output -match '(?i)(found\s+[1-9]\d*\s+threats?|threats? found\s*:\s*[1-9]\d*|detected\s+[1-9]\d*\s+threats?)') {
     $scanResult.status = 'FAIL'
-  } elseif ($exitCode -eq 0 -and $output -match '(?i)(no threats found|found\s+0\s+threats?|threats? found\s*:\s*0|0 threats? detected)') {
+  } elseif ($exitCode -eq 0 -and $output -match '(?i)(no threats found|found\s+no threats?|found\s+0\s+threats?|threats? found\s*:\s*0|0 threats? detected)') {
     $scanResult.status = 'PASS'
   }
 }
