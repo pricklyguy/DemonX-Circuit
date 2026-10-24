@@ -51,7 +51,7 @@ components = [
     ("RF_Module:ESP32-S3-WROOM-1", "U1", "ESP32-S3-WROOM-1-N8", (72, 88), "RF_Module:ESP32-S3-WROOM-1"),
     ("Sensor:BME280", "U2", "BME280 0x76", (135, 62), "Package_LGA:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering"),
     ("Regulator_Switching:TPS563201", "U3", "TPS563201 3V3", (52, 55), "Package_TO_SOT_SMD:SOT-23-6"),
-    ("Device:L_Small", "L1", "2.2uH", (72, 55), "Inductor_SMD:L_4.0x4.0mm"),
+    ("Device:L_Small", "L1", "2.2uH", (72, 55), "Inductor_SMD:L_1210_3225Metric"),
     ("Device:C", "C1", "10uF input", (32, 45), "Capacitor_SMD:C_0805_2012Metric"),
     ("Device:C", "C2", "100nF bootstrap", (62, 44), "Capacitor_SMD:C_0603_1608Metric"),
     ("Device:C", "C3", "22uF output", (91, 45), "Capacitor_SMD:C_0805_2012Metric"),
@@ -65,6 +65,7 @@ components = [
     ("Device:R", "R5", "330R base", (113, 101), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R6", "100k base pulldown", (124, 101), "Resistor_SMD:R_0603_1608Metric"),
     ("Device:R", "R7", "10k EN pullup", (74, 119), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R8", "0R BME280 address strap (0x76)", (159, 119), "Resistor_SMD:R_0603_1608Metric"),
     ("Transistor_BJT:Q_NPN_BEC", "Q1", "MMBT2222ALT1G", (140, 101), "Package_TO_SOT_SMD:SOT-23"),
     ("Device:D", "D1", "MMSD4148T1G", (156, 101), "Diode_SMD:D_SOD-123"),
     ("Relay:G5V-1", "K1", "G5V-1-DC5 (low-voltage DC only)", (177, 94), "Relay_THT:Relay_SPDT_Omron_G5V-1"),
@@ -79,7 +80,8 @@ components = [
 net_pins = {
     "+5V_IN": [("J1", "1"), ("U3", "3"), ("U3", "5"), ("C1", "1"), ("K1", "2"), ("D1", "1")],
     "+3V3": [("L1", "2"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("U1", "2"), ("U2", "2"), ("U2", "6"), ("U2", "8"), ("R1", "1"), ("R3", "1"), ("R4", "1"), ("R7", "1")],
-    "GND": [("J1", "2"), ("U3", "1"), ("C1", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"), ("C6", "2"), ("U1", "1"), ("U1", "40"), ("U1", "41"), ("U2", "1"), ("U2", "5"), ("U2", "7"), ("R2", "2"), ("R6", "2"), ("Q1", "2")],
+    "GND": [("J1", "2"), ("U3", "1"), ("C1", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"), ("C6", "2"), ("U1", "1"), ("U1", "40"), ("U1", "41"), ("U2", "1"), ("U2", "7"), ("R2", "2"), ("R6", "2"), ("R8", "2"), ("Q1", "2")],
+    "BME280_ADDR_76": [("U2", "5"), ("R8", "1")],
     "SW": [("U3", "2"), ("L1", "1"), ("C2", "1")],
     "VBST": [("U3", "6"), ("C2", "2")],
     "VFB": [("U3", "4"), ("R1", "2"), ("R2", "1")],
@@ -109,11 +111,12 @@ for net_name, pins in net_pins.items():
     for reference, pin_number in pins:
         wire_label(schematic, reference, pin_number, net_name)
 
-# This prototype sheet uses net labels at each pin. Add power flags only to
-# positive supply nets; grounding a bidirectional BME280 address strap through
-# a PWR_FLAG creates a false power-output conflict in native ERC.
+# This prototype sheet uses net labels at each pin. The BME280's SDO address
+# pin is grounded through an explicit 0-ohm jumper: electrically direct at DC,
+# while retaining distinct ERC nets for this library's bidirectional pin type.
 for reference, position, net_name in (
     ("PF1", (15, 128), "+5V_IN"),
+    ("PF2", (25, 135), "GND"),
     ("PF3", (210, 20), "+3V3"),
 ):
     flag = schematic.components.add(
