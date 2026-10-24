@@ -25,7 +25,12 @@ async function filesUnder(root) {
 async function sha256(file) { return createHash('sha256').update(await readFile(file)).digest('hex'); }
 async function compareTrees(source, packaged, renamedExe = false) {
   const expected = await filesUnder(source);
-  const actual = await filesUnder(packaged);
+  // resources/app is the application payload added alongside Electron's own
+  // resources/default_app.asar and must not be compared as Electron runtime.
+  const actual = (await filesUnder(packaged)).filter(file => {
+    const firstPart = relative(packaged, file).split(sep)[0].toLowerCase();
+    return firstPart !== 'resources' || !relative(packaged, file).toLowerCase().startsWith(`resources${sep}app${sep}`);
+  });
   const expectedMap = new Map(expected.map(file => [relative(source, file).split(sep).join('/'), file]));
   if (renamedExe) {
     const electronExe = expectedMap.get('electron.exe');
@@ -42,9 +47,8 @@ async function compareTrees(source, packaged, renamedExe = false) {
 }
 
 await compareTrees(electronSource, bundle, true);
-const appFiles = await filesUnder(appRoot);
 const executableFiles = [];
-for (const file of [...await filesUnder(bundle), ...appFiles]) {
+for (const file of await filesUnder(bundle)) {
   const extension = extname(file).toLowerCase();
   if (!executableExts.has(extension)) continue;
   const normalized = relative(bundle, file).split(sep).join('/');

@@ -108,7 +108,8 @@ jobs:
           Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
           Copy-Item desktop/assets "$appRoot/desktop/assets" -Recurse -Force
-          Copy-Item prototype "$appRoot/prototype" -Recurse -Force
+          New-Item -ItemType Directory -Force "$appRoot/prototype" | Out-Null
+          Copy-Item 'prototype/generate-esphome.mjs' "$appRoot/prototype/generate-esphome.mjs" -Force
           Copy-Item examples "$appRoot/examples" -Recurse -Force
           $starter = Join-Path (Get-Location).Path 'build/native-fixture/examples/native-smoke/DX_LED_Smoke'
           if (-not (Test-Path -LiteralPath (Join-Path $starter 'DX_LED_Smoke.kicad_sch'))) { throw 'Verified KiCad LED starter schematic is missing.' }
