@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +15,7 @@ const force = args.includes('--force');
 const outputArgs = args.filter(arg => arg !== '--force');
 if (outputArgs.length > 1) throw new Error('Usage: node generate-esphome.mjs [output.yaml] [--force]');
 const output = outputArgs[0] ? resolve(outputArgs[0]) : resolve(repo, 'examples/esp32-sensor/esphome.yaml');
+await mkdir(dirname(output), { recursive: true });
 if (controller.esphomeVariant !== 'esp32s3') throw new Error(`Unsupported ESPHome variant ${controller.esphomeVariant}`);
 const map = Object.fromEntries(project.hardware.nets.flatMap(net => net.connections.map(endpoint => [endpoint, net.name])));
 const pins = { sda: pinMap.I2C_SDA, scl: pinMap.I2C_SCL, relay: pinMap.RELAY_DRIVER };

@@ -56,7 +56,7 @@ jobs:
         run: |
           rm -f reports/esphome-validation/secrets.yaml
 
-      - name: Upload generated YAML and validation output
+      - name: Upload generated YAML
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

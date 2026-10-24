@@ -1,38 +1,87 @@
-# Prove the Circuit workflow in small steps
+# Checkpoint 2 prototype plan
 
-This checkpoint supports a direction but does **not** yet demonstrate the required EDA workflow. Research dated 2026-10-23 recommends a DemonX-owned UI/manifest over KiCad 10.0.7 CLI with native files preserved, and LibrePCB as the alternative fixture to compare. Keep work on a dedicated feature branch; do not change or merge existing DemonX applications.
+Checkpoint 1 approval is recorded. Work is isolated on `codex/demonx-circuit-foundation`; no other DemonX repository was changed, no host toolchain was installed, and no merge to `main` was performed.
 
-## Initial checkpoint: evidence and gaps
+## Status summary (2026-10-24)
 
-| Capability | Evidence at checkpoint | Status |
+| Capability | Result | Evidence and boundary |
 |---|---|---|
-| Project create/open | `examples/esp32-sensor/project.json` is a small DemonX manifest; native files list is empty and status says `not-created` | Manifest fixture only; no KiCad project opens |
-| Existing/custom component library | One JSON component record exists under `examples/libraries/DemonX_Local`; MCP source returns it | No engine library load, edit round-trip, archive/backup/restore or community search |
-| MCP inspection | `node prototype/smoke.mjs` passes initialization, tool discovery/schema annotations, read-only project/component/YAML/resource calls, and invalid-argument errors against the declared 2025-11-25 subset | Working subset smoke only; no named-client or current 2026-07-28 conformance |
-| ESPHome generation | Node syntax checks pass; standalone generator created `examples/esp32-sensor/esphome.yaml` from ESP32-S3-WROOM-1-N8 logical map GPIO8/9/10, placeholder secrets and overwrite protection | YAML was not parsed or checked by ESPHome; logical map is not a native verified netlist |
-| ERC / DRC | `kicad-cli` absent; no native schematic/board exists | Not run; no native design |
-| Gerber / Excellon / STEP | `kicad-cli` absent; no native PCB exists | Not run; no manufacturing or 3D artifact |
-| Gerber-to-DXF | Existing converter source inspected; parser and coordinate gaps documented in suite handoff | Not run; do not claim CNC-ready geometry |
-| ESPHome validation | `esphome` CLI and YAML parser absent | `esphome config` / compile not run |
+| Minimal native project create/reopen | **PASS** | KiCad 10.0.7 created an LED/resistor project in Ubuntu 24.04 CI; `sch upgrade --force` and `pcb upgrade --force` reopened/saved it. Later netlist export succeeded. Artifacts: [run 40053908270](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40053908270). |
+| ERC/DRC for smoke project | **PASS** | 0 ERC errors/warnings, 0 DRC violations, 0 unconnected pads; initial and reopened exit codes were 0. This does not validate the ESP32 reference fixture. |
+| Manufacturing smoke exports | **PASS** | Gerber X2 layers and job file, Excellon drill file, non-empty board-only STEP. Coordinate/converter accuracy and component-assembly STEP were not checked. |
+| KiCad existing library access | **PASS, limited** | Official symbol/footprint tables were initialized in the isolated official KiCad image; built-in LED, resistor and connector assets loaded. Not a community library search or custom library round-trip. |
+| User custom component native export/import | **NOT TESTED** | Existing MCP fixture exports one JSON component record; no native `.kicad_sym`/`.pretty` create-export-reimport was executed. |
+| MCP project inspection | **PASS, limited** | Windows Node 24.19.0 `node prototype/smoke.mjs` passed init, tool discovery, read-only manifest/component/YAML calls, resource read and invalid-input handling. It reads the JSON fixture, not native KiCad. |
+| MCP interoperability | **NOT TESTED** | Hand-written protocol subset targets 2025-11-25. No official SDK, Codex/OpenAI, Claude/Anthropic or other-client conformance claim. |
+| ESP32-S3 YAML generation | **PASS** | Generated from the explicit candidate GPIO8 SDA / GPIO9 SCL / GPIO10 relay map. Generator creates missing parent directories and refuses existing outputs unless backup, comparison and typed approval are used. |
+| ESPHome config validation | **PASS** | Official ESPHome 2026.10.0 image, pinned by digest, printed `INFO Configuration is valid!`; parsed substitutions as GPIO8/9/10. Passing [run 40054368439](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40054368439). |
+| ESPHome compile/deploy | **NOT TESTED** | `esphome config` only; no compilation, hardware connection, flashing, Device Builder upload or HA change. CI uses disposable placeholder secrets and removes the file before artifact upload. |
+| Complete reference fixture | **NOT TESTED** | No native ESP32-S3/BME280/relay schematic or PCB yet; therefore no fixture ERC/DRC, Gerbers, drill, component assembly STEP or native-derived firmware map. Candidate parts are documented in [ESP32-REFERENCE-FIXTURE-COMPONENTS.md](../research/ESP32-REFERENCE-FIXTURE-COMPONENTS.md). |
+| Windows EDA and ESPHome workflow | **NOT TESTED** | Host has no KiCad CLI or ESPHome; no host installations or machine changes. Windows was tested for Node/MCP/YAML generation only. |
+| Gerber-to-DXF / CNC and Forge | **NOT TESTED** | No geometry handoff or manufacturing coordinate test in this checkpoint. |
 
-The MCP subset smoke, Node syntax checks and YAML file generation are the actual recorded tests. Machine/tooling availability is a blocker for EDA and ESPHome validation: KiCad CLI and ESPHome CLI are absent. A bundled Python 3.12.14 runtime is available, but ESPHome and a YAML parser are not installed. Acquire/pin toolchains or use documented setup CI before claiming those paths work. Other risks: KiCad/GPL redistribution review, library asset licenses, proprietary EasyEDA asset provenance, current MCP protocol/client differences, coordinate transforms, STEP alignment in Forge, board pin validation, and user secrets.
+## Actual outputs
 
-## Proposed phases
+KiCad 10.0.7 container output included:
 
-**Milestone 1 — native fixture feasibility (next).** Provision pinned KiCad 10.0.7 and ESPHome 2026.10.0 on Windows and Linux. Finish a native ESP32-S3-WROOM-1-N8 + BME280 + protected low-voltage relay design with exact, licensed symbols/footprints. Run actual ERC/DRC; export Gerber X2, Excellon and STEP; inspect reports and coordinate origins; round-trip a user-owned native library component; save/reopen; run `esphome config` and compile where toolchain permits. Do not route or connect mains. This is blocked in the present environment by missing EDA/firmware tools and native project files.
+```text
+** ERC messages: 0 Errors 0 Warnings **
+** Found 0 DRC violations **
+** Found 0 unconnected pads **
+STEP file reports/native-smoke/step/DX_LED_Smoke.step created.
+Successfully saved schematic file using latest format
+Successfully saved board file using latest format
+ERC exit codes (initial/reopened): 0/0
+DRC exit codes (initial/reopened): 0/0
+PASS: KiCad 10.0.7; native project generated, checked, exported, and reopened by CLI.
+```
 
-**Milestone 2 — adapter and project package.** Add manifest schema/versioning, path-safe packaging, engine detection, CLI capability gates, report parsing, project backup/staging/diff/rollback. Compare the same fixture in LibrePCB for checks, output and library coverage. Select whether KiCad remains the default based on evidence.
+ESPHome first reported a **FAIL** because the schema rejects its all-zero API key test value. The workflow now generates a random key ephemerally; the subsequent run output was:
 
-**Milestone 3 — read-only MCP and AI review.** Replace handwritten protocol stub with pinned MCP SDK implementation aligned to a stated protocol revision. Test named compatible clients. Add scoped project, net, component, geometry and library inspection; return source/version/confidence and mark engineering recommendations as suggestions.
+```text
+Version: 2026.10.0
+INFO ESPHome 2026.10.0
+INFO Reading configuration dx-esp32-sensor.generated.yaml...
+INFO Configuration is valid!
+  i2c_sda: GPIO8
+  i2c_scl: GPIO9
+  relay_gpio: GPIO10
+```
 
-**Milestone 4 — approved changes and manufacturing.** Add staged edits, validation, explicit approval and audit trail. Add export manifest with unit/origin/layer mapping and keep original Gerbers/drills. Evaluate converter only with curated fixtures and downstream CNC/CAM geometry checks. Do not emit toolpaths until coordinate accuracy is proven.
+The failing run and correction are retained in GitHub Actions history; only the passing output establishes YAML schema acceptance.
 
-**Milestone 5 — Forge and firmware handoffs.** Validate STEP and board envelope orientation in Forge. Generate board-specific ESPHome templates and test pinned CLI configuration/compile. Add user-guided HA discovery. Consider optional HA companion/config flow only after YAML workflow is useful.
+## Candidate circuit selections
+
+- Controller: ESP32-S3-WROOM-1-N8; GPIO8 SDA, GPIO9 SCL and GPIO10 relay control are candidate assignments. Native symbol pad numbering still needs a checked mapping.
+- Sensor: bare BME280 at I²C address 0x76, CSB high, SDO low, local decoupling and pull-ups.
+- Regulator: TI TPS563201, using TI's 3.3 V recommended 33.2 kΩ/10.0 kΩ feedback, 2.2 µH typical inductor and 20–68 µF output-capacitance table range.
+- Relay: Omron G5V-1 5 V coil (30 mA nominal) with onsemi MMBT2222ALT1G low-side transistor, 330 Ω base resistor, 100 kΩ base-emitter pulldown, and onsemi MMSD4148T1G flyback diode. Contacts stay low-voltage DC only.
+
+These are manufacturer-sourced candidates, not an approved production design. Verify exact symbol pins, package assignments, transistor saturation, thermal/current margins, layout, antenna keepout and load suitability. KiCad rule checks are not electrical simulation or hardware testing.
+
+## Recommended first usable desktop application
+
+Proceed with an Electron 45 project/workflow shell (TypeScript UI) and separate KiCad 10.0.7 installation. Reuse the native editor for schematic and PCB canvas work. Initial controls should cover New/Open Project, Add Component/library ownership, Open in KiCad, Check Circuit, Prepare Manufacturing Files, Ask AI, Generate ESPHome YAML and Create Enclosure handoff. The main process owns allowlisted native CLI/ESPHome process adapters; the renderer stays sandboxed and has no direct filesystem or shell privilege. Show results, assumptions and diffs before any write or external action.
+
+This recommendation is for the first UI milestone only; the Electron app has not been implemented or packaged. Electron 45.0.0 stable was current on 2026-10-24. Tauri remains the lighter alternative if a platform spike shows Electron packaging or memory costs are unacceptable.
+
+## Proposed implementation phases
+
+1. **Finish native reference fixture.** Build the ESP32-S3/BME280/relay schematic and PCB from official KiCad 10 libraries; export a custom user-owned component; bind firmware pin mapping to schematic nets; run actual ERC/DRC, exports and reopen. Keep all component and license provenance. If DRC is not clean, retain the reports and fix the design rather than suppressing checks.
+2. **Validate firmware from native connectivity.** Generate a staged YAML preview with explicit unresolved behavior/placeholders; validate and, when practical, compile with pinned ESPHome. Never deploy or overwrite external configuration.
+3. **Build desktop shell.** Electron + TypeScript project dashboard and secured main-process engine adapters. Do not rebuild schematic or layout canvases. Test Windows and Linux separately.
+4. **Replace MCP stub.** Use a pinned official MCP SDK/protocol. Read-only native project and library inspection first; then staged writes with validation, explicit user approval, transaction/audit and rollback. Prove Codex/OpenAI and Claude/Anthropic clients before claiming interoperability.
+5. **Manufacturing and suite handoffs.** Test Gerber/drill coordinate contracts and converter geometry, then STEP assembly orientation in Forge. CNC toolpath generation remains outside scope until geometry and machining constraints are proven.
 
 ## Exact next milestone
 
-**Complete Milestone 1: a reproducible native KiCad + ESPHome fixture run.** Deliver a checked-in native project, license/provenance ledger for each component, successful or diagnostically explained ERC/DRC, Gerber X2/Excellon and STEP exports, and captured `esphome config`/compile result (or clearly documented toolchain blocker). Then validate YAML from the fixture and test both supported OS paths before calling the prototype portable. At current checkpoint, the exact next action is to run the complete native workflow after obtaining the pinned Windows/Linux toolchains; current evidence does not justify starting the GUI.
+**Create and verify the component-level ESP32-S3/BME280/relay native KiCad fixture.** First enumerate official KiCad 10 symbol pin numbers and footprint mappings against manufacturer datasheets, then make the native project and a native-library export/reimport artifact. Run ERC/DRC on the fixture before allowing the ESPHome generator to claim it uses verified project connectivity. Produce a full STEP assembly only when component models and orientation are confirmed. Current host can safely reuse the documented Ubuntu CI + digest-pinned KiCad image; Windows KiCad remains untested.
 
-## Owner decisions before expansion
+## Owner decisions at this checkpoint
 
-The owner approved continuing with KiCad CLI as the provisional foundation and selected the ESP32-S3-WROOM-1-N8 fixture target. Still unresolved before expansion: whether users must install KiCad or Circuit may later bundle it after legal review; whether community sharing allows only assets with explicit redistribution rights; and which MCP client versions are release targets. Deployment to an ESPHome device and writes to external applications remain out of scope until later approval.
+1. Approve the proposed Electron 45 + native KiCad editor first-usable-app direction, or request a Tauri comparison spike.
+2. Approve the selected component candidates for native prototype placement (not for production/manufacture); otherwise identify preferred part constraints.
+3. Confirm whether the fixture may expose only low-voltage relay contacts (current design constraint: yes) and that no mains scenario is in scope.
+4. Confirm the first named MCP client builds/versions when ready for actual conformance testing. Current target intent remains Codex/OpenAI and Claude/Anthropic, with no claim until tested.
+
+Do not merge to `main`, install host dependencies, deploy firmware or write to a Home Assistant/Device Builder instance without the relevant approval.
