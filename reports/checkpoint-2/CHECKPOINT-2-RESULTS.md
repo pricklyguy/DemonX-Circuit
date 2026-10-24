@@ -17,7 +17,7 @@ For the first usable DemonX Circuit desktop application, build an Electron 45 pr
 | Minimal project ERC/DRC | **PASS** | Initial and reopened ERC/DRC exit codes `0/0`; 0 ERC errors/warnings, 0 DRC violations, 0 unconnected pads. |
 | Gerber/Excellon export | **PASS** | Gerber X2 layer set (copper, mask, paste, silkscreen, outline) and Excellon drill file generated. Coordinate alignment and downstream Gerber-to-DXF are not proven. |
 | STEP export | **PASS, limited** | Non-empty board-only STEP file generated. Component assembly geometry/orientations are **NOT TESTED**. |
-| Reference schematic generation | **PASS** | KiCad 10.0.7 generated the editable 23-component ESP32-S3-WROOM-1-N8/BME280/TPS563201/relay schematic. The native XML netlist matched all 16 expected nets, including GPIO8/GPIO9/GPIO10 and relay contact groups. [Passing run 40056972003](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40056972003), artifact 12544939443. |
+| Reference schematic generation | **PASS** | KiCad 10.0.7 generated the editable 23-component ESP32-S3-WROOM-1-N8/BME280/TPS563201/relay schematic. The native XML netlist matched all 16 expected nets, including GPIO8/GPIO9/GPIO10 and relay contact groups. [Passing run 40057214585](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40057214585), [artifact 12545378201](https://github.com/pricklyguy/DemonX-Circuit/actions/runs/40057214585/artifacts/12545378201). |
 | Reference schematic ERC/reopen | **PASS** | Initial and reopened KiCad ERC both report 0 errors and 0 warnings. Symbol inheritance warnings, the BME280 address strap/ERC conflict and an invalid generic inductor footprint were exposed and corrected during iterative runs. The final check did not suppress ERC rules. |
 | ESPHome YAML from native netlist | **PASS** | Generator now requires KiCad-verified `U1.12=I2C_SDA`, `U1.17=I2C_SCL`, `U1.18=RELAY_GPIO` and the separately recorded Espressif GPIO map before writing YAML. The same passing run reports `Native KiCad connectivity source: DX_ESP32_Sensor.net`. |
 | ESPHome schema validation | **PASS** | Official `ghcr.io/esphome/esphome:2026.10.0` pinned by digest; final integrated run reports `INFO Configuration is valid!` with GPIO8/9/10. Validation secrets are generated ephemerally and removed before artifact upload. An earlier integrated attempt **FAIL**ed because the example all-zero API key is reserved; this was fixed and rerun. |
@@ -45,6 +45,17 @@ INFO Configuration is valid!
 ```
 
 The last lines above are native-derived YAML schema validation. This is not an ESPHome firmware compile, circuit simulation, board DRC or hardware test.
+
+### Failed iterations retained
+
+These failures were observed and corrected; they are not hidden by the passing run:
+
+- **FAIL, run 40056091782:** KiCad reported three inherited-symbol mismatches and one bidirectional-pin/power-output conflict; the pin-group check itself passed. Replaced inherited symbols and separated the BME280 address strap.
+- **FAIL, run 40056297142:** ERC found an undriven ground and a nonexistent inductor footprint. Added a ground power marker with a separate 0 Ω SDO strap and selected a standard library footprint.
+- **FAIL, run 40056626569:** KiCad checks passed, but the minimal KiCad image has no Node.js. Moved YAML generation to the runner.
+- **FAIL, run 40056817200:** Native connectivity and ERC passed; ESPHome rejected the all-zero example API key. The final workflow uses a random temporary key and removes the secret file.
+
+The latest full run 40057214585 is **PASS** for its declared smoke, netlist, ERC, reopen and ESPHome schema-validation steps.
 
 ## Not tested / current blockers
 
