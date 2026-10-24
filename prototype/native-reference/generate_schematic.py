@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Create an editable KiCad 10 ESP32-S3/BME280/relay reference schematic.
+
+This is a feasibility fixture. Native KiCad CLI ERC is authoritative; it is
+not a substitute for circuit simulation, layout review, or hardware testing.
+"""
+
+import json
+from pathlib import Path
+
+import kicad_sch_api as ksa
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PROJECT_DIR = ROOT / "examples" / "esp32-sensor" / "native"
+PROJECT_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT = PROJECT_DIR / "DX_ESP32_Sensor"
+
+for suffix in (".kicad_pro", ".kicad_sch", ".kicad_pcb"):
+    target = PROJECT.with_suffix(suffix)
+    if target.exists():
+        raise FileExistsError(f"Refusing to replace existing native project file: {target}")
+
+# Connection groups are defined by verified datasheet pin numbers. Labels keep
+# the generated sheet readable while leaving native wire editing to KiCad.
+components = [
+    ("RF_Module:ESP32-S3-WROOM-1", "U1", "ESP32-S3-WROOM-1-N8", (72, 88), "RF_Module:ESP32-S3-WROOM-1"),
+    ("Sensor:BME280", "U2", "BME280 0x76", (135, 62), "Package_LGA:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering"),
+    ("Regulator_Switching:TPS563201", "U3", "TPS563201 3V3", (52, 55), "Package_TO_SOT_SMD:SOT-23-6"),
+    ("Device:L", "L1", "2.2uH", (72, 55), "Inductor_SMD:L_4.0x4.0mm"),
+    ("Device:C", "C1", "10uF input", (32, 45), "Capacitor_SMD:C_0805_2012Metric"),
+    ("Device:C", "C2", "100nF bootstrap", (62, 44), "Capacitor_SMD:C_0603_1608Metric"),
+    ("Device:C", "C3", "22uF output", (91, 45), "Capacitor_SMD:C_0805_2012Metric"),
+    ("Device:C", "C4", "22uF output", (101, 45), "Capacitor_SMD:C_0805_2012Metric"),
+    ("Device:C", "C5", "100nF BME280", (144, 45), "Capacitor_SMD:C_0603_1608Metric"),
+    ("Device:R", "R1", "33.2k VFB high", (78, 68), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R2", "10k VFB low", (91, 68), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R3", "4.7k SDA pullup", (127, 79), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R4", "4.7k SCL pullup", (140, 79), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R5", "330R base", (113, 101), "Resistor_SMD:R_0603_1608Metric"),
+    ("Device:R", "R6", "100k base pulldown", (124, 101), "Resistor_SMD:R_0603_1608Metric"),
+    ("Transistor_BJT:MMBT2222A", "Q1", "MMBT2222ALT1G", (140, 101), "Package_TO_SOT_SMD:SOT-23"),
+    ("Diode:MMSD4148", "D1", "MMSD4148T1G", (156, 101), "Diode_SMD:D_SOD-123"),
+    ("Relay:G5V-1", "K1", "G5V-1-DC5 (low-voltage DC only)", (177, 94), "Relay_THT:Relay_SPDT_Omron_G5V-1"),
+    ("Connector_Generic:Conn_01x02", "J1", "5V DC INPUT", (28, 85), "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"),
+]
+
+# Pin numbers verified against the Espressif, Bosch, TI, onsemi, and Omron
+# source drawings listed in docs/research/ESP32-REFERENCE-FIXTURE-COMPONENTS.md.
+# Relay contact termination remains intentionally NC until the bottom-view
+# contact map is translated and independently reviewed against the footprint.
+net_pins = {
+    "+5V_IN": [("J1", "1"), ("U3", "3"), ("U3", "5"), ("C1", "1"), ("K1", "2"), ("D1", "1")],
+    "+3V3": [("L1", "2"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("U1", "2"), ("U2", "2"), ("U2", "6"), ("U2", "8"), ("R1", "1"), ("R3", "1"), ("R4", "1")],
+    "GND": [("J1", "2"), ("U3", "1"), ("C1", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"), ("U1", "1"), ("U1", "40"), ("U1", "41"), ("U2", "1"), ("U2", "5"), ("U2", "7"), ("R2", "2"), ("R6", "2"), ("Q1", "2")],
+    "SW": [("U3", "2"), ("L1", "1"), ("C2", "1")],
+    "VBST": [("U3", "6"), ("C2", "2")],
+    "VFB": [("U3", "4"), ("R1", "2"), ("R2", "1")],
+    "I2C_SDA": [("U1", "12"), ("U2", "3"), ("R3", "2")],
+    "I2C_SCL": [("U1", "17"), ("U2", "4"), ("R4", "2")],
+    "RELAY_GPIO": [("U1", "18"), ("R5", "1")],
+    "RELAY_BASE": [("R5", "2"), ("Q1", "1"), ("R6", "1")],
+    "RELAY_COIL_LOW": [("K1", "9"), ("Q1", "3"), ("D1", "2")],
+}
+
+schematic = ksa.create_schematic("DX_ESP32_Sensor")
+for lib_id, reference, value, position, footprint in components:
+    schematic.components.add(
+        lib_id=lib_id,
+        reference=reference,
+        value=value,
+        position=position,
+        footprint=footprint,
+    )
+
+connected = {pin for pins in net_pins.values() for pin in pins}
+for net_name, pins in net_pins.items():
+    for reference, pin_number in pins:
+        position = schematic.get_component_pin_position(reference, pin_number)
+        if position is None:
+            raise RuntimeError(f"KiCad symbol pin lookup failed for {reference}.{pin_number} ({net_name})")
+        schematic.add_label(net_name, position=(position.x, position.y))
+
+# This prototype sheet uses net labels at each pin. Add explicit power flags so
+# native ERC can distinguish externally supplied and regulated power nets.
+for reference, position, net_name in (
+    ("#FLG01", (29, 52), "+5V_IN"),
+    ("#FLG02", (29, 58), "GND"),
+    ("#FLG03", (96, 52), "+3V3"),
+):
+    flag = schematic.components.add(
+        lib_id="power:PWR_FLAG",
+        reference=reference,
+        value="PWR_FLAG",
+        position=position,
+    )
+    pin_position = schematic.get_component_pin_position(reference, "1")
+    if pin_position is None:
+        raise RuntimeError(f"Could not resolve power flag pin for {reference}")
+    schematic.add_label(net_name, position=(pin_position.x, pin_position.y))
+
+# Explicit no-connect markers make unused ESP32 module pins intentional. A
+# missing coordinate or a symbol pin lookup failure stops project generation.
+all_pins = {
+    "U1": [str(number) for number in range(1, 42)],
+    "U2": [str(number) for number in range(1, 9)],
+    "U3": [str(number) for number in range(1, 7)],
+    "K1": ["1", "2", "5", "6", "9", "10"],
+    "Q1": ["1", "2", "3"],
+    "D1": ["1", "2"],
+}
+for reference, pin_numbers in all_pins.items():
+    for pin_number in pin_numbers:
+        if (reference, pin_number) in connected:
+            continue
+        position = schematic.get_component_pin_position(reference, pin_number)
+        if position is None:
+            raise RuntimeError(f"KiCad no-connect pin lookup failed for {reference}.{pin_number}")
+        schematic.no_connects.add(position=(position.x, position.y))
+
+issues = schematic.validate()
+if issues:
+    raise RuntimeError("Schematic generator validation: " + "; ".join(issue.message for issue in issues))
+
+schematic.save(str(PROJECT.with_suffix(".kicad_sch")))
+PROJECT.with_suffix(".kicad_pro").write_text("{}\n", encoding="utf-8")
+
+pin_map = {
+    "project": "DX_ESP32_Sensor",
+    "engine": "KiCad 10.0.7",
+    "source": "native-schematic-labels",
+    "connections": {name: [f"{reference}.{pin}" for reference, pin in pins] for name, pins in net_pins.items()},
+    "status": "candidate reference fixture; KiCad CLI ERC/DRC and manual net review required",
+    "relayContacts": "not connected in this prototype pending independent bottom-view drawing and footprint review",
+}
+(PROJECT_DIR / "pin-map.json").write_text(json.dumps(pin_map, indent=2) + "\n", encoding="utf-8")
+print(f"Created KiCad schematic: {PROJECT.with_suffix('.kicad_sch')}")
+print(f"Placed {len(components)} components; labeled {sum(map(len, net_pins.values()))} pin connections.")
+print("Relay contact pins remain explicitly not connected pending bottom-view verification.")

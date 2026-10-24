@@ -7,7 +7,9 @@ on:
     paths:
       - ".github/workflows/kicad-native-smoke.yml"
       - "prototype/native-smoke/**"
+      - "prototype/native-reference/**"
       - "examples/native-smoke/**"
+      - "examples/esp32-sensor/**"
   workflow_dispatch:
 
 permissions:
@@ -57,6 +59,29 @@ jobs:
               KICAD_SYMBOL_DIR=/usr/share/kicad/symbols \
               KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints \
                 bash prototype/native-smoke/run.sh
+
+              echo "=== ESP32-S3/BME280/relay native schematic prototype ==="
+              export PYTHONPATH=/tmp/native-smoke-python:/tmp/pip-bootstrap
+              export KICAD_SYMBOL_DIR=/usr/share/kicad/symbols
+              export KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints
+              python3 prototype/native-reference/generate_schematic.py
+              mkdir -p reports/native-reference
+              kicad-cli sch export netlist --format kicadxml \
+                --output reports/native-reference/DX_ESP32_Sensor.net \
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+              python3 prototype/native-reference/verify_netlist.py \
+                reports/native-reference/DX_ESP32_Sensor.net
+              kicad-cli sch erc --severity-all --exit-code-violations \
+                --output reports/native-reference/erc.rpt \
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+              cat reports/native-reference/erc.rpt
+              kicad-cli sch upgrade --force \
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+              kicad-cli sch erc --severity-all --exit-code-violations \
+                --output reports/native-reference/erc-reopened.rpt \
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+              cat reports/native-reference/erc-reopened.rpt
+              echo "PASS: Native ESP32 reference schematic generated, netlisted, ERC-checked, and reopened."
             '
 
       - name: Save KiCad reports and manufacturing files
@@ -66,6 +91,8 @@ jobs:
           name: kicad-native-smoke-10.0.7
           path: |
             reports/native-smoke/
+            reports/native-reference/
             examples/native-smoke/DX_LED_Smoke/
+            examples/esp32-sensor/native/
           if-no-files-found: warn
           retention-days: 30
