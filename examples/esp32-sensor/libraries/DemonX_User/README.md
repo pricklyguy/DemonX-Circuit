@@ -1,8 +1,9 @@
 # DemonX_User native KiCad library
 
-This original `DX_User_Header_1x02` symbol and footprint were authored for DemonX Circuit and are dedicated to the public domain under CC0-1.0. They do not copy an upstream library item. Users may edit, export, archive, and share these files.
+This original `DX_User_Header_1x02` symbol and footprint were authored for DemonX Circuit and are dedicated to the public domain under CC0-1.0. They do not copy an upstream library item. Users may edit, export, archive, and share these files. The authored legacy `DemonX_User.lib` symbol is converted by KiCad 10.0.7 to its current `.kicad_sym` library format as part of the native export/delete/reimport test.
 
-- Symbol: `DemonX_User.kicad_sym`
+- Symbol source: `DemonX_User.lib` (KiCad legacy native format)
+- Round-trip export: KiCad-generated `DemonX_User.kicad_sym`
 - Footprint: `../DemonX_User.pretty/DX_User_Header_1x02.kicad_mod`
 - Provenance: original DemonX Circuit prototype asset, created 2026-10-24
 - Dependency: none

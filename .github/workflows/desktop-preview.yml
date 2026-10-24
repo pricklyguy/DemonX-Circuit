@@ -54,6 +54,13 @@ jobs:
           "Electron exited: $($proc.HasExited); exit code: $($proc.ExitCode)" | Out-File -Append $stdoutLog
           Get-Content $stdoutLog,$stderrLog -ErrorAction SilentlyContinue
 
+      - name: Make screenshot available for checkpoint inspection
+        if: steps.capture.outputs.capture_status == 'PASS'
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("reports/checkpoint-3/desktop-preview.png")
+          Write-Output ("DX_REAL_SCREENSHOT_BASE64:" + [Convert]::ToBase64String($bytes))
+
       - name: Assemble portable Windows preview folder
         shell: pwsh
         run: |

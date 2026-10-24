@@ -11,7 +11,7 @@
       "footprints": "libraries/DemonX_User.pretty",
       "owner": "local-user",
       "license": "CC0-1.0",
-      "status": "original KiCad symbol and footprint; portable project copy"
+      "status": "original KiCad legacy symbol source and .pretty footprint; project copy; KiCad CLI native-format round-trip pending"
     },
     {
       "id": "DemonX_Project",

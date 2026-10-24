@@ -10,7 +10,7 @@ from pathlib import Path
 import pcbnew
 
 ROOT = Path(__file__).resolve().parents[2]
-SYMBOL_SOURCE = ROOT / "examples/libraries/DemonX_User/DemonX_User.kicad_sym"
+SYMBOL_SOURCE = ROOT / "examples/libraries/DemonX_User/DemonX_User.lib"
 FOOTPRINT_SOURCE = ROOT / "examples/libraries/DemonX_User.pretty/DX_User_Header_1x02.kicad_mod"
 NAME = "DX_User_Header_1x02"
 
@@ -28,6 +28,16 @@ with tempfile.TemporaryDirectory(prefix="demonx-library-roundtrip-") as tmp:
     shutil.copy2(SYMBOL_SOURCE, source / SYMBOL_SOURCE.name)
     shutil.copy2(FOOTPRINT_SOURCE, source / "DemonX_User.pretty" / FOOTPRINT_SOURCE.name)
     shutil.copy2(SYMBOL_SOURCE.parent / "README.md", source / "README.md")
+    native_library = source / "DemonX_User.kicad_sym"
+    cli = os.environ.get("KICAD_CLI", "kicad-cli")
+    import subprocess
+    exported = subprocess.run(
+        [cli, "sym", "upgrade", "--force", "--output", str(native_library), str(source / SYMBOL_SOURCE.name)],
+        capture_output=True, text=True,
+    )
+    if exported.returncode != 0 or not native_library.is_file():
+        raise RuntimeError(f"KiCad could not export the original user symbol to native format: {exported.stdout}\n{exported.stderr}")
+
     archive = tmp / "DemonX_User-CC0-1.0.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for item in sorted(source.rglob("*")):
@@ -46,19 +56,9 @@ with tempfile.TemporaryDirectory(prefix="demonx-library-roundtrip-") as tmp:
     if actual != expected:
         raise RuntimeError("Library reimport content hashes differ from exported content")
 
-    cli = os.environ.get("KICAD_CLI", "kicad-cli")
-    import subprocess
-    normalized_library = tmp / "DemonX_User-native.kicad_sym"
-    upgraded = subprocess.run(
-        [cli, "sym", "upgrade", "--force", "--output", str(normalized_library), str(imported / "DemonX_User.kicad_sym")],
-        capture_output=True, text=True,
-    )
-    if upgraded.returncode != 0 or not normalized_library.is_file():
-        raise RuntimeError(f"KiCad could not parse/re-export the imported symbol library: {upgraded.stdout}\n{upgraded.stderr}")
-
     symbol_dir = tmp / "symbols"
     symbol_dir.mkdir()
-    result = subprocess.run([cli, "sym", "export", "svg", "--output", str(symbol_dir), str(normalized_library)], capture_output=True, text=True)
+    result = subprocess.run([cli, "sym", "export", "svg", "--output", str(symbol_dir), str(imported / "DemonX_User.kicad_sym")], capture_output=True, text=True)
     symbol_files = list(symbol_dir.glob(f"{NAME}.svg"))
     if result.returncode != 0 or len(symbol_files) != 1:
         raise RuntimeError(f"KiCad could not parse the imported symbol library: {result.stdout}\n{result.stderr}")
@@ -81,10 +81,11 @@ with tempfile.TemporaryDirectory(prefix="demonx-library-roundtrip-") as tmp:
     output = ROOT / "reports/native-reference/library-roundtrip"
     output.mkdir(parents=True, exist_ok=True)
     shutil.copy2(archive, output / archive.name)
+    shutil.copy2(imported / "DemonX_User.kicad_sym", output / "DemonX_User.kicad_sym")
     shutil.copy2(symbol_svg, output / symbol_svg.name)
     shutil.copy2(board_file, output / board_file.name)
     print("PASS: original CC0 user library exported to ZIP, source test workspace deleted, ZIP reimported, and content hashes match.")
-    print("PASS: KiCad 10.0.7 parsed the imported symbol SVG and pcbnew loaded/reused both footprint pads in a reopened board.")
+    print("PASS: KiCad 10.0.7 converted the authored legacy symbol to native .kicad_sym, parsed its SVG after reimport, and pcbnew loaded/reused both footprint pads in a reopened board.")
     print(f"Archive: {archive.name} ({archive.stat().st_size} bytes)")
     for name, digest in sorted(actual.items()):
         print(f"SHA256 {digest}  {name}")

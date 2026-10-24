@@ -1,0 +1,18 @@
+EESchema-LIBRARY Version 2.4
+#encoding utf-8
+#
+# DX_User_Header_1x02
+#
+DEF DX_User_Header_1x02 J 0 20 Y Y 1 F N
+F0 "J" 0 200 50 H V C CNN
+F1 "DX_User_Header_1x02" 0 -200 50 H V C CNN
+F2 "DemonX_User:DX_User_Header_1x02" 0 0 50 H I C CNN
+F3 "" 0 0 50 H I C CNN
+DRAW
+S -150 150 150 -150 0 1 10 f
+X SIG 1 300 50 150 L 50 50 1 1 P
+X GND 2 300 -50 150 L 50 50 1 1 P
+ENDDRAW
+ENDDEF
+#
+#End Library
