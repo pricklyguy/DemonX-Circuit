@@ -23,6 +23,20 @@ const port = 24000 + Math.floor(Math.random() * 12000);
 const report = { executable: basename(executable), checks: [], notTested: [], diagnostics: [], screenshots: [], unhandled: [] };
 let child;
 let socket;
+let acceptanceStage = 'initialization';
+const acceptanceWatchdog = setTimeout(async () => {
+  const error = `Packaged Windows acceptance exceeded 15 minutes; last stage: ${acceptanceStage}`;
+  report.fatal = error;
+  report.diagnostics.push({ kind: 'acceptance-watchdog', text: error });
+  report.endedAt = new Date().toISOString();
+  try { await writeFile(join(artifactDir, 'acceptance-report.json'), JSON.stringify(report, null, 2)); } catch {}
+  console.error(error);
+  process.exit(124);
+}, 15 * 60 * 1000);
+function markStage(stage) {
+  acceptanceStage = stage;
+  console.log(`[acceptance] ${new Date().toISOString()} ${stage}`);
+}
 let nextId = 1;
 const pending = new Map();
 
@@ -48,10 +62,14 @@ async function getTarget() {
   throw new Error('Packaged Electron did not expose a renderer debugging target.');
 }
 async function connect(url) {
+  markStage('connect-to-packaged-renderer-cdp');
   socket = new WebSocket(url);
   await new Promise((resolveOpen, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out connecting to packaged renderer CDP.')), 15000);
     socket.addEventListener('open', resolveOpen, { once: true });
     socket.addEventListener('error', reject, { once: true });
+    socket.addEventListener('open', () => clearTimeout(timer), { once: true });
+    socket.addEventListener('error', () => clearTimeout(timer), { once: true });
   });
   socket.addEventListener('message', async event => {
     const raw = typeof event.data === 'string' ? event.data : await event.data.text();
@@ -82,9 +100,10 @@ async function evaluate(expression, timeout = 10000) {
   return response.result?.value;
 }
 async function waitUntil(expression, description, timeout = 10000) {
+  markStage(`wait: ${description}`);
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    try { const value = await evaluate(expression, 2000); if (value) return value; } catch {}
+    try { const value = await evaluate(expression, 2000); if (value) { markStage(`passed: ${description}`); return value; } } catch {}
     await sleep(100);
   }
   throw new Error(`Timed out waiting for ${description}`);
@@ -93,6 +112,7 @@ async function click(id) {
   return clickSelector(`#${id}`);
 }
 async function clickSelector(selector) {
+  markStage(`click: ${selector}`);
   const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; e.scrollIntoView({block:'center',inline:'nearest'}); const r = e.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; const hit=document.elementFromPoint(x,y); window.__acceptanceClick = null; document.addEventListener('click',ev=>window.__acceptanceClick={id:ev.target?.id||null,tag:ev.target?.tagName||null,x,y}, {capture:true,once:true}); return {x,y,disabled:!!e.disabled,box:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},insideViewport:x>=0&&y>=0&&x<innerWidth&&y<innerHeight,hit:hit?.id||hit?.tagName||null,hitBelongsToControl:!!hit&&(hit===e||e.contains(hit))}; })()`);
   if (!rect) throw new Error(`Missing visible control ${selector}`);
   if (rect.disabled) throw new Error(`Control ${selector} is disabled`);
@@ -106,6 +126,15 @@ async function clickSelector(selector) {
   const clicked = await evaluate('window.__acceptanceClick');
   if (!clicked) throw new Error(`Mouse click was not dispatched to the page for ${selector}: ${JSON.stringify(rect)}`);
   report.diagnostics.push({ kind: 'mouse-click', selector, ...rect, dispatched: clicked });
+}
+async function stopPackagedApp(context) {
+  if (!child || child.exitCode !== null) return;
+  markStage(`stop-packaged-app: ${context}`);
+  const processToStop = child;
+  const exited = new Promise(resolveExit => processToStop.once('exit', () => resolveExit(true)));
+  processToStop.kill();
+  const didExit = await Promise.race([exited, sleep(15000).then(() => false)]);
+  if (!didExit) throw new Error(`Packaged app did not exit within 15 seconds (${context}).`);
 }
 async function screenshot(name) {
   const result = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -145,6 +174,7 @@ async function launch({ noNativeTools = false } = {}) {
 }
 
 try {
+  markStage('launch-first-packaged-instance');
   await launch();
   const appPath = await evaluate('location.pathname');
   const preload = await evaluate(`({bridge:typeof window.circuit, script:[...document.scripts].map(s=>s.getAttribute('src')), title:document.title})`);
@@ -273,10 +303,9 @@ try {
     else for (const name of ['Open PCB engine availability action', 'Check Circuit KiCad CLI action', 'Manufacturing KiCad CLI action', 'ESPHome fixture preview']) notTested(name, 'Requires the packaged ESP32 native fixture.');
   }
 
-  const exitPromise = new Promise(resolveExit => child.once('exit', resolveExit));
-  await child.kill();
-  await exitPromise;
+  await stopPackagedApp('settings/reopen test complete');
   socket?.close(); socket = undefined;
+  markStage('launch-for-persistence-check');
   await launch();
   const persistedTheme = await evaluate('document.body.dataset.theme || "dark"');
   check('theme preference persists across packaged-app restart', persistedTheme === switchedTheme, `Restarted theme=${persistedTheme}; selected=${switchedTheme}`);
@@ -287,8 +316,8 @@ try {
   check('recent project persists across restart', Array.isArray(persistedRecent) && persistedRecent.some(p => p.projectId === recentId), JSON.stringify(persistedRecent));
   await screenshot(`desktop-${persistedTheme}-restarted.png`);
 
-  const normalExit = new Promise(resolveExit => child.once('exit', resolveExit));
-  await child.kill(); await normalExit; socket?.close(); socket = undefined;
+  await stopPackagedApp('persistence test complete'); socket?.close(); socket = undefined;
+  markStage('launch-with-native-tool-discovery-disabled');
   await launch({ noNativeTools: true });
   const missingTools = await evaluate('window.circuit.getNativeTools()');
   check('missing KiCad is detected with an isolated empty search path', missingTools.kicadCli === null && missingTools.kicadVersion === null, JSON.stringify(missingTools));
@@ -304,8 +333,12 @@ try {
   report.fatal = error instanceof Error ? error.stack : String(error);
   report.diagnostics.push({ kind: 'acceptance-runner-failure', text: report.fatal });
 } finally {
+  clearTimeout(acceptanceWatchdog);
   socket?.close();
-  if (child && child.exitCode === null) { const exitPromise = new Promise(resolveExit => child.once('exit', resolveExit)); child.kill(); await exitPromise; }
+  if (child && child.exitCode === null) {
+    try { await stopPackagedApp('acceptance cleanup'); }
+    catch (error) { report.diagnostics.push({ kind: 'packaged-app-cleanup', text: error instanceof Error ? error.message : String(error) }); }
+  }
   report.endedAt = new Date().toISOString();
   const reportPath = join(artifactDir, 'acceptance-report.json');
   await writeFile(reportPath, JSON.stringify(report, null, 2));
