@@ -93,10 +93,11 @@ async function click(id) {
   return clickSelector(`#${id}`);
 }
 async function clickSelector(selector) {
-  const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; window.__acceptanceClick = null; document.addEventListener('click',ev=>window.__acceptanceClick={id:ev.target?.id||null,tag:ev.target?.tagName||null,x,y}, {capture:true,once:true}); return {x,y,disabled:!!e.disabled,box:{x:r.x,y:r.y,width:r.width,height:r.height},hit:document.elementFromPoint(x,y)?.id||document.elementFromPoint(x,y)?.tagName||null}; })()`);
+  const rect = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; const hit=document.elementFromPoint(x,y); window.__acceptanceClick = null; document.addEventListener('click',ev=>window.__acceptanceClick={id:ev.target?.id||null,tag:ev.target?.tagName||null,x,y}, {capture:true,once:true}); return {x,y,disabled:!!e.disabled,box:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},insideViewport:x>=0&&y>=0&&x<innerWidth&&y<innerHeight,hit:hit?.id||hit?.tagName||null,hitBelongsToControl:!!hit&&(hit===e||e.contains(hit))}; })()`);
   if (!rect) throw new Error(`Missing visible control ${selector}`);
   if (rect.disabled) throw new Error(`Control ${selector} is disabled`);
   if (!rect.box.width || !rect.box.height) throw new Error(`Control ${selector} is not visible: ${JSON.stringify(rect)}`);
+  if (!rect.insideViewport || !rect.hitBelongsToControl) throw new Error(`Control ${selector} cannot receive a center click in the packaged viewport: ${JSON.stringify(rect)}`);
   await cdp('Page.bringToFront');
   await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y });
   await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', buttons: 1, clickCount: 1 });
