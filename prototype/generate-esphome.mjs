@@ -12,16 +12,28 @@ const controller = project.hardware.controller;
 const pinMap = project.hardware.pinMap;
 const args = process.argv.slice(2);
 const force = args.includes('--force');
-const outputArgs = args.filter(arg => arg !== '--force');
-if (outputArgs.length > 1) throw new Error('Usage: node generate-esphome.mjs [output.yaml] [--force]');
+const verifiedArg = args.indexOf('--verified-netlist');
+const verifiedPath = verifiedArg >= 0 ? args[verifiedArg + 1] : undefined;
+if (verifiedArg >= 0 && (!verifiedPath || verifiedPath.startsWith('--'))) throw new Error('--verified-netlist requires a JSON file exported after native KiCad netlist verification');
+const outputArgs = args.filter((arg, index) => arg !== '--force' && index !== verifiedArg && !(verifiedArg >= 0 && index === verifiedArg + 1));
+if (outputArgs.length > 1) throw new Error('Usage: node generate-esphome.mjs [output.yaml] [--verified-netlist verified-netlist.json] [--force]');
 const output = outputArgs[0] ? resolve(outputArgs[0]) : resolve(repo, 'examples/esp32-sensor/esphome.yaml');
 await mkdir(dirname(output), { recursive: true });
 if (controller.esphomeVariant !== 'esp32s3') throw new Error(`Unsupported ESPHome variant ${controller.esphomeVariant}`);
 const map = Object.fromEntries(project.hardware.nets.flatMap(net => net.connections.map(endpoint => [endpoint, net.name])));
 const pins = { sda: pinMap.I2C_SDA, scl: pinMap.I2C_SCL, relay: pinMap.RELAY_DRIVER };
+const native = verifiedPath ? JSON.parse(await readFile(resolve(verifiedPath), 'utf8')) : undefined;
+const nativeMap = native?.netByPin;
+const nativePinNumbers = controller.nativePinNumbers ?? {};
 for (const [signal, gpio] of Object.entries(pins)) {
   if (!/^GPIO\d+$/.test(gpio ?? '')) throw new Error(`Invalid or missing GPIO for ${signal}: ${gpio}`);
-  if (!map[`U1.${gpio}`]) throw new Error(`Required pin is not explicitly connected: U1.${gpio}`);
+  const pinNumber = nativePinNumbers[gpio];
+  const expectedNet = { sda: 'I2C_SDA', scl: 'I2C_SCL', relay: 'RELAY_GPIO' }[signal];
+  if (!pinNumber) throw new Error(`No datasheet-derived native pin number is recorded for ${gpio}`);
+  if (!map[`U1.${gpio}`]) throw new Error(`Required GPIO is not explicitly connected in project metadata: U1.${gpio}`);
+  if (verifiedPath && nativeMap[`U1.${pinNumber}`] !== expectedNet) {
+    throw new Error(`Native KiCad netlist does not verify ${gpio} on U1 pin ${pinNumber} as ${expectedNet}`);
+  }
 }
 await readFile(secretsTemplate, 'utf8');
 
@@ -108,4 +120,5 @@ if (existing !== undefined) {
 await writeFile(output, yaml, { flag: existing === undefined ? 'wx' : 'w' });
 console.log(`Generated ${output}`);
 console.log(`ESPHome target: ESP32-S3 (${controller.esphomeVariant}); ${pins.sda} SDA, ${pins.scl} SCL, ${pins.relay} relay driver.`);
-console.log('This logical pin map is not an ERC/DRC-verified circuit. Credentials are placeholders. Validate with the installed ESPHome CLI before use.');
+console.log(verifiedPath ? `Native KiCad connectivity source: ${native.source}` : 'Connectivity source: project manifest only; native KiCad connectivity is not verified.');
+console.log('This does not validate circuit suitability or behavior. Credentials are placeholders. Validate with the installed ESPHome CLI before use.');

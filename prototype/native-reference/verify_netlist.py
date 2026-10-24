@@ -2,6 +2,7 @@
 """Assert selected named connections exist in KiCad's exported XML netlist."""
 
 import sys
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,7 +10,8 @@ from pathlib import Path
 EXPECTED = {
     "+5V_IN": {"J1.1", "U3.3", "U3.5", "C1.1", "K1.2", "D1.1"},
     "+3V3": {"L1.2", "C3.1", "C4.1", "C5.1", "U1.2", "U2.2", "U2.6", "U2.8", "R1.1", "R3.1", "R4.1", "R7.1"},
-    "GND": {"J1.2", "U3.1", "C1.2", "C3.2", "C4.2", "C5.2", "C6.2", "U1.1", "U1.40", "U1.41", "U2.1", "U2.5", "U2.7", "R2.2", "R6.2", "Q1.2"},
+    "GND": {"J1.2", "U3.1", "C1.2", "C3.2", "C4.2", "C5.2", "C6.2", "U1.1", "U1.40", "U1.41", "U2.1", "U2.7", "R2.2", "R6.2", "R8.2", "Q1.2"},
+    "BME280_ADDR_76": {"U2.5", "R8.1"},
     "SW": {"U3.2", "L1.1", "C2.1"},
     "VBST": {"U3.6", "C2.2"},
     "VFB": {"U3.4", "R1.2", "R2.1"},
@@ -27,6 +29,7 @@ EXPECTED = {
 
 def main():
     path = Path(sys.argv[1])
+    output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     root = ET.parse(path).getroot()
     nets = {}
     for net in root.findall("./nets/net"):
@@ -40,6 +43,7 @@ def main():
 
     failures = []
     used_net_names = {}
+    verified = {}
     for name, expected in EXPECTED.items():
         matching = [(actual_name, nodes) for actual_name, nodes in nets.items() if expected <= nodes]
         if not matching:
@@ -55,6 +59,8 @@ def main():
             if previous:
                 failures.append(f"Short: logical nets {previous} and {name} merge as {actual_name}")
             used_net_names[actual_name] = name
+            for node in matching[0][1]:
+                verified[node] = name
             # KiCad names local nets as /<sheet-path>/<label> in XML.
             effective_name = actual_name.rsplit("/", 1)[-1]
             if effective_name != name:
@@ -62,6 +68,10 @@ def main():
             print(f"NET PASS {name}: {', '.join(sorted(matching[0][1]))}")
     if failures:
         raise SystemExit("KiCad exported netlist does not match the candidate connection map:\n" + "\n".join(failures))
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps({"source": str(path.name), "netByPin": verified}, indent=2) + "\n", encoding="utf-8")
+        print(f"Wrote native-verified pin map: {output_path}")
     print(f"PASS: verified {len(EXPECTED)} named nets from KiCad's native XML netlist")
 
 
