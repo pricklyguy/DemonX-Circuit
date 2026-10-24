@@ -59,7 +59,8 @@ with tempfile.TemporaryDirectory(prefix="demonx-library-roundtrip-") as tmp:
     symbol_dir = tmp / "symbols"
     symbol_dir.mkdir()
     result = subprocess.run([cli, "sym", "export", "svg", "--output", str(symbol_dir), str(imported / "DemonX_User.kicad_sym")], capture_output=True, text=True)
-    symbol_files = list(symbol_dir.glob(f"{NAME}.svg"))
+    # KiCad 10's documented symbol SVG exporter names the file with a unit suffix.
+    symbol_files = list(symbol_dir.glob(f"{NAME}_unit*.svg"))
     if result.returncode != 0 or len(symbol_files) != 1:
         raise RuntimeError(f"KiCad could not parse the imported symbol library: {result.stdout}\n{result.stderr}")
     symbol_svg = symbol_files[0]
