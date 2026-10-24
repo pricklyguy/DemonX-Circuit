@@ -149,13 +149,13 @@ try {
   await click('theme-toggle');
   const switchedTheme = initialTheme === 'light' ? 'dark' : 'light';
   const themeAfterClick = await waitUntil(`document.body.dataset.theme === ${JSON.stringify(switchedTheme)}`, 'theme change after clicking rail control', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
-  check('theme button responds and saves preference', themeAfterClick === switchedTheme, JSON.stringify(themeAfterClick));
+  check('theme button responds and saves preference', themeAfterClick === true, JSON.stringify(themeAfterClick));
   await click('settings-open');
   const settingsOpen = await evaluate(`document.getElementById('settings-dialog').open`);
   check('settings control opens settings', settingsOpen === true, `settings dialog open=${settingsOpen}`);
   await click('settings-theme-toggle');
   const settingsTheme = await waitUntil(`document.body.dataset.theme === ${JSON.stringify(initialTheme)}`, 'theme control in settings', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
-  check('settings theme control responds', settingsTheme === initialTheme, JSON.stringify(settingsTheme));
+  check('settings theme control responds', settingsTheme === true, JSON.stringify(settingsTheme));
   await click('settings-theme-toggle');
   await waitUntil(`document.body.dataset.theme === ${JSON.stringify(switchedTheme)}`, 'restore selected theme', 3000);
   await clickSelector('#settings-dialog .modal-actions button');
@@ -170,11 +170,11 @@ try {
   if (manifest) {
     await click('open-project');
     const reopened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening the created project through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
-    check('Open Project reopens the created project', reopened === manifest.projectId, JSON.stringify(reopened));
+    check('Open Project reopens the created project', reopened === true, `projectId=${manifest.projectId}; condition=${reopened}`);
     await waitUntil(`document.querySelector('#recent-projects .recent-item')`, 'recent project list refresh');
     await clickSelector('#recent-projects .recent-item');
     const recentOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(manifest.projectId)}`, 'opening a recent project', 3000);
-    check('recent project entry reopens project', recentOpened === manifest.projectId, JSON.stringify(recentOpened));
+    check('recent project entry reopens project', recentOpened === true, `projectId=${manifest.projectId}; condition=${recentOpened}`);
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
 
   const fixtureId = 'dx-esp32-bme280-relay-demo';
@@ -182,10 +182,10 @@ try {
   if (hasFixture) {
     await click('open-project');
     fixtureOpened = await waitUntil(`document.getElementById('project-id')?.textContent === ${JSON.stringify(fixtureId)}`, 'open packaged ESP32 native fixture', 5000).catch(async error => ({ error: error.message, id: await evaluate("document.getElementById('project-id')?.textContent") }));
-    check('opens packaged ESP32 fixture project', fixtureOpened === fixtureId, JSON.stringify(fixtureOpened));
+    check('opens packaged ESP32 fixture project', fixtureOpened === true, `projectId=${fixtureId}; condition=${fixtureOpened}`);
   } else notTested('fixture-backed native project actions', 'This package does not include the verified native fixture files. The Windows workflow package includes them.');
 
-  if (fixtureOpened === fixtureId) {
+  if (fixtureOpened === true) {
     await click('open-pcb');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native PCB action result');
     const openText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
@@ -206,8 +206,8 @@ try {
 
     await click('generate-esphome');
     await waitUntil(`document.getElementById('yaml-dialog').open`, 'ESPHome preview dialog');
-    const yamlCheck = await evaluate(`({hasEsp32:document.getElementById('yaml-content').value.includes('esp32:'), hasBoard:document.getElementById('yaml-content').value.includes('esp32-s3-devkitc-1'), status:document.getElementById('yaml-status').textContent})`);
-    check('ESPHome preview generated for fixture', yamlCheck.hasEsp32 && yamlCheck.hasBoard, JSON.stringify(yamlCheck));
+    const yamlCheck = await evaluate(`({hasEsp32:document.getElementById('yaml-content').value.includes('esp32:'), hasVariant:document.getElementById('yaml-content').value.includes('variant: esp32s3'), hasSda:document.getElementById('yaml-content').value.includes('i2c_sda: GPIO8'), hasRelay:document.getElementById('yaml-content').value.includes('relay_gpio: GPIO10'), status:document.getElementById('yaml-status').textContent})`);
+    check('ESPHome preview generated from fixture pin map', yamlCheck.hasEsp32 && yamlCheck.hasVariant && yamlCheck.hasSda && yamlCheck.hasRelay, JSON.stringify(yamlCheck));
     if (!detected.esphome) check('missing ESPHome status is clear', /NOT TESTED/i.test(yamlCheck.status) && /not installed|not found|not available/i.test(yamlCheck.status), yamlCheck.status);
     else pass('ESPHome CLI installed', `Detected ${detected.esphome}; compatibility validation status shown in preview.`);
     await click('yaml-cancel');
