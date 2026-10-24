@@ -27,9 +27,16 @@ def wire_label(schematic, reference, pin_number, name):
     pin_position = schematic.get_component_pin_position(reference, pin_number)
     if pin_position is None:
         raise RuntimeError(f"KiCad symbol pin lookup failed for {reference}.{pin_number} ({name})")
-    # KiCad netlist export does not attach a net label placed directly on a
-    # symbol pin. A short native wire provides an explicit label attachment.
-    label_position = (pin_position.x + 5.08, pin_position.y)
+    component = schematic.components.get(reference)
+    center = component.position
+    dx = pin_position.x - center.x
+    dy = pin_position.y - center.y
+    # Route each label stub away from the symbol body. A fixed +X stub caused
+    # real KiCad netlist shorts where it crossed opposite-side pins.
+    if abs(dx) >= abs(dy):
+        label_position = (pin_position.x + (2.54 if dx >= 0 else -2.54), pin_position.y)
+    else:
+        label_position = (pin_position.x, pin_position.y + (2.54 if dy >= 0 else -2.54))
     schematic.add_wire_to_pin(label_position, reference, pin_number)
     schematic.add_label(name, position=label_position)
 
@@ -115,12 +122,7 @@ for reference, position, net_name in (
         value="PWR_FLAG",
         position=grid_position(position),
     )
-    pin_position = schematic.get_component_pin_position(reference, "1")
-    if pin_position is None:
-        raise RuntimeError(f"Could not resolve power flag pin for {reference}")
-    label_position = (pin_position.x + 5.08, pin_position.y)
-    schematic.add_wire_to_pin(label_position, reference, "1")
-    schematic.add_label(net_name, position=label_position)
+    wire_label(schematic, reference, "1", net_name)
 
 # Explicit no-connect markers make unused ESP32 module pins intentional. A
 # missing coordinate or a symbol pin lookup failure stops project generation.
