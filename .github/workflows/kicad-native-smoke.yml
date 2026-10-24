@@ -16,31 +16,35 @@ permissions:
 jobs:
   native-smoke:
     runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/kicad/kicad:10.0.7-amd64-full@sha256:58fbffc63250320eadc80a4dd47833f64dfc1c9f0b5c63f7ea6c3055e2b0ca74
+    env:
+      KICAD_IMAGE: ghcr.io/kicad/kicad:10.0.7-amd64-full@sha256:58fbffc63250320eadc80a4dd47833f64dfc1c9f0b5c63f7ea6c3055e2b0ca74
     steps:
       - name: Check out feature branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Verify isolated image and Python bindings
         run: |
-          kicad-cli version
-          python3 --version
-          python3 -c 'import pcbnew; print("pcbnew:", pcbnew.GetBuildVersion())'
-          test -d /usr/share/kicad/symbols
-          test -d /usr/share/kicad/footprints
-
-      - name: Install schematic generator into a temporary package target
-        run: |
-          python3 -m pip install --disable-pip-version-check --no-compile \
-            --target "$RUNNER_TEMP/native-smoke-python" \
-            -r prototype/native-smoke/requirements.txt
-          echo "NATIVE_SMOKE_PYTHONPATH=$RUNNER_TEMP/native-smoke-python" >> "$GITHUB_ENV"
-          echo "KICAD_SYMBOL_DIR=/usr/share/kicad/symbols" >> "$GITHUB_ENV"
-          echo "KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints" >> "$GITHUB_ENV"
-
-      - name: Generate, check, export, and reopen the native fixture
-        run: bash prototype/native-smoke/run.sh
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            -e HOME=/tmp/kicad-smoke-home \
+            -e KICAD_IMAGE="$KICAD_IMAGE" \
+            "$KICAD_IMAGE" bash -lc '
+              mkdir -p "$HOME" /tmp/native-smoke-python
+              kicad-cli version
+              python3 --version
+              python3 -c "import pcbnew; print(\"pcbnew:\", pcbnew.GetBuildVersion())"
+              test -d /usr/share/kicad/symbols
+              test -d /usr/share/kicad/footprints
+              python3 -m pip install --disable-pip-version-check --no-compile \
+                --target /tmp/native-smoke-python \
+                -r prototype/native-smoke/requirements.txt
+              NATIVE_SMOKE_PYTHONPATH=/tmp/native-smoke-python \
+              KICAD_SYMBOL_DIR=/usr/share/kicad/symbols \
+              KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints \
+                bash prototype/native-smoke/run.sh
+            '
 
       - name: Save KiCad reports and manufacturing files
         if: always()
