@@ -142,21 +142,24 @@ try {
   const detected = await evaluate('window.circuit.getEnvironment()');
   report.diagnostics.push({ kind: 'installed-native-tools', ...detected });
   check('native tool detection reflects installed tools', (typeof detected.kicad === 'string' || detected.kicad === null) && (typeof detected.kicadEditor === 'string' || detected.kicadEditor === null) && (typeof detected.esphome === 'string' || detected.esphome === null), JSON.stringify(detected));
-  await screenshot('desktop-dark.png');
+  const initialTheme = await evaluate('document.body.dataset.theme');
+  check('packaged app starts in its stored theme', initialTheme === 'dark' || initialTheme === 'light', `Initial theme=${initialTheme}`);
+  await screenshot(`desktop-${initialTheme}.png`);
 
   await click('theme-toggle');
-  const themeAfterClick = await waitUntil(`document.body.dataset.theme === 'light'`, 'light mode after clicking theme control', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
-  check('theme button responds and saves preference', themeAfterClick === true, JSON.stringify(themeAfterClick));
+  const switchedTheme = initialTheme === 'light' ? 'dark' : 'light';
+  const themeAfterClick = await waitUntil(`document.body.dataset.theme === ${JSON.stringify(switchedTheme)}`, 'theme change after clicking rail control', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
+  check('theme button responds and saves preference', themeAfterClick === switchedTheme, JSON.stringify(themeAfterClick));
   await click('settings-open');
   const settingsOpen = await evaluate(`document.getElementById('settings-dialog').open`);
   check('settings control opens settings', settingsOpen === true, `settings dialog open=${settingsOpen}`);
   await click('settings-theme-toggle');
-  const settingsTheme = await waitUntil(`document.body.dataset.theme === 'dark'`, 'theme control in settings', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
-  check('settings theme control responds', settingsTheme === true, JSON.stringify(settingsTheme));
+  const settingsTheme = await waitUntil(`document.body.dataset.theme === ${JSON.stringify(initialTheme)}`, 'theme control in settings', 3000).catch(async error => ({ error: error.message, theme: await evaluate('document.body.dataset.theme') }));
+  check('settings theme control responds', settingsTheme === initialTheme, JSON.stringify(settingsTheme));
   await click('settings-theme-toggle');
-  await waitUntil(`document.body.dataset.theme === 'light'`, 'restore light mode', 3000);
+  await waitUntil(`document.body.dataset.theme === ${JSON.stringify(switchedTheme)}`, 'restore selected theme', 3000);
   await clickSelector('#settings-dialog .modal-actions button');
-  await screenshot('desktop-light.png');
+  await screenshot(`desktop-${switchedTheme}.png`);
 
   await click('new-project');
   const created = await waitUntil(`document.getElementById('project-state')?.textContent === 'OPEN'`, 'new project creation through packaged IPC', 5000).catch(async error => ({ error: error.message, title: await evaluate("document.getElementById('result-title')?.textContent"), message: await evaluate("document.getElementById('result-message')?.textContent") }));
@@ -219,11 +222,11 @@ try {
   socket?.close(); socket = undefined;
   await launch();
   const persistedTheme = await evaluate('document.body.dataset.theme || "dark"');
-  check('theme preference persists across packaged-app restart', persistedTheme === 'light', `Restarted theme=${persistedTheme}`);
+  check('theme preference persists across packaged-app restart', persistedTheme === switchedTheme, `Restarted theme=${persistedTheme}; selected=${switchedTheme}`);
   const persistedRecent = await evaluate('window.circuit.getRecentProjects()');
   const recentId = hasFixture ? 'dx-esp32-bme280-relay-demo' : manifest?.projectId;
   check('recent project persists across restart', Array.isArray(persistedRecent) && persistedRecent.some(p => p.projectId === recentId), JSON.stringify(persistedRecent));
-  await screenshot('desktop-light-restarted.png');
+  await screenshot(`desktop-${persistedTheme}-restarted.png`);
 
   if (report.unhandled.length) fail('zero renderer/preload exceptions', JSON.stringify(report.unhandled));
   else pass('zero renderer/preload exceptions', 'No CDP Runtime exceptions were observed during startup or tested clicks.');
