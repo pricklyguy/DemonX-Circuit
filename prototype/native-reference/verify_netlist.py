@@ -18,6 +18,9 @@ EXPECTED = {
     "RELAY_GPIO": {"U1.18", "R5.1"},
     "RELAY_BASE": {"R5.2", "Q1.1", "R6.1"},
     "RELAY_COIL_LOW": {"K1.9", "Q1.3", "D1.2"},
+    "RELAY_COM": {"K1.5", "K1.6", "J2.1"},
+    "RELAY_NO": {"K1.10", "J2.2"},
+    "RELAY_NC": {"K1.1", "J2.3"},
     "EN": {"U1.3", "R7.2", "C6.1"},
 }
 

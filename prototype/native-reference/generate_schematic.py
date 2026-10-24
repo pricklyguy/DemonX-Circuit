@@ -62,12 +62,13 @@ components = [
     ("Diode:MMSD4148", "D1", "MMSD4148T1G", (156, 101), "Diode_SMD:D_SOD-123"),
     ("Relay:G5V-1", "K1", "G5V-1-DC5 (low-voltage DC only)", (177, 94), "Relay_THT:Relay_SPDT_Omron_G5V-1"),
     ("Connector_Generic:Conn_01x02", "J1", "5V DC INPUT", (28, 85), "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"),
+    ("Connector_Generic:Conn_01x03", "J2", "RELAY CONTACTS - LOW-VOLTAGE DC", (209, 92), "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"),
 ]
 
 # Pin numbers verified against the Espressif, Bosch, TI, onsemi, and Omron
 # source drawings listed in docs/research/ESP32-REFERENCE-FIXTURE-COMPONENTS.md.
-# Relay contact termination remains intentionally NC until the bottom-view
-# contact map is translated and independently reviewed against the footprint.
+# Omron G5V-1 bottom view: coil 2/9, common 5/6, NC 1, NO 10. External
+# contacts are explicitly low-voltage DC only; no mains circuit is in scope.
 net_pins = {
     "+5V_IN": [("J1", "1"), ("U3", "3"), ("U3", "5"), ("C1", "1"), ("K1", "2"), ("D1", "1")],
     "+3V3": [("L1", "2"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("U1", "2"), ("U2", "2"), ("U2", "6"), ("U2", "8"), ("R1", "1"), ("R3", "1"), ("R4", "1"), ("R7", "1")],
@@ -80,6 +81,9 @@ net_pins = {
     "RELAY_GPIO": [("U1", "18"), ("R5", "1")],
     "RELAY_BASE": [("R5", "2"), ("Q1", "1"), ("R6", "1")],
     "RELAY_COIL_LOW": [("K1", "9"), ("Q1", "3"), ("D1", "2")],
+    "RELAY_COM": [("K1", "5"), ("K1", "6"), ("J2", "1")],
+    "RELAY_NO": [("K1", "10"), ("J2", "2")],
+    "RELAY_NC": [("K1", "1"), ("J2", "3")],
     "EN": [("U1", "3"), ("R7", "2"), ("C6", "1")],
 }
 
@@ -150,9 +154,9 @@ pin_map = {
     "source": "native-schematic-labels",
     "connections": {name: [f"{reference}.{pin}" for reference, pin in pins] for name, pins in net_pins.items()},
     "status": "candidate reference fixture; KiCad CLI ERC/DRC and manual net review required",
-    "relayContacts": "not connected in this prototype pending independent bottom-view drawing and footprint review",
+    "relayContacts": "bottom-view mapping: 2/9 coil, 5/6 common, 1 NC, 10 NO; external header is low-voltage DC only",
 }
 (PROJECT_DIR / "pin-map.json").write_text(json.dumps(pin_map, indent=2) + "\n", encoding="utf-8")
 print(f"Created KiCad schematic: {PROJECT.with_suffix('.kicad_sch')}")
 print(f"Placed {len(components)} components; labeled {sum(map(len, net_pins.values()))} pin connections.")
-print("Relay contact pins remain explicitly not connected pending bottom-view verification.")
+print("Omron G5V-1 coil and low-voltage DC contact terminals are included in the candidate net map.")
