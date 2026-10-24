@@ -188,28 +188,38 @@ try {
   if (fixtureOpened === true) {
     await click('open-pcb');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native PCB action result');
+    const openStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const openText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
-    check('Open PCB reports detected engine result or helpful missing-tool status', detected.kicadEditor ? /KiCad|PCB/i.test(openText) : /NOT TESTED:.*KiCad desktop editor was not found/i.test(openText), openText);
+    report.checks.push({ name: 'Open PCB native editor action', result: openStatus, evidence: openText });
+    if (detected.kicadEditor) check('Open PCB action reports editor result', /KiCad|PCB/i.test(openText), openText);
+    else { notTested('Open PCB in KiCad', 'KiCad desktop editor was not found on this Windows runner.'); check('Open PCB explains missing editor', /NOT TESTED:.*KiCad desktop editor was not found/i.test(openText), openText); }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('check-circuit');
     await waitUntil(`document.getElementById('result-dialog').open`, 'Check Circuit action result');
+    const checkStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const checkText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent + '\\n' + document.getElementById('result-output').textContent`);
-    check('Check Circuit executes or identifies missing KiCad CLI', detected.kicad ? /KiCad .*check/i.test(checkText) : /NOT TESTED: KiCad CLI was not found/i.test(checkText), checkText);
+    report.checks.push({ name: 'Check Circuit native ERC/DRC action', result: checkStatus, evidence: checkText });
+    if (detected.kicad) check('Check Circuit reports native check output', /KiCad .*check|DRC|ERC/i.test(checkText), checkText);
+    else { notTested('KiCad ERC/DRC execution', 'KiCad CLI was not found on this Windows runner.'); check('Check Circuit explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(checkText), checkText); }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('prepare-manufacturing');
     await waitUntil(`document.getElementById('result-dialog').open`, 'manufacturing action result');
+    const manufacturingStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const manufacturingText = await evaluate(`document.getElementById('result-kicker').textContent + ': ' + document.getElementById('result-message').textContent`);
-    check('manufacturing action executes or identifies missing KiCad CLI', detected.kicad ? /Manufacturing|DRC/i.test(manufacturingText) : /NOT TESTED: KiCad CLI was not found/i.test(manufacturingText), manufacturingText);
+    report.checks.push({ name: 'Manufacturing export action', result: manufacturingStatus, evidence: manufacturingText });
+    if (detected.kicad) check('manufacturing action reports output or DRC result', /Manufacturing|DRC/i.test(manufacturingText), manufacturingText);
+    else { notTested('Gerber/Excellon/STEP export action', 'KiCad CLI was not found on this Windows runner.'); check('Manufacturing action explains missing KiCad CLI', /NOT TESTED: KiCad CLI was not found/i.test(manufacturingText), manufacturingText); }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('generate-esphome');
     await waitUntil(`document.getElementById('yaml-dialog').open`, 'ESPHome preview dialog');
     const yamlCheck = await evaluate(`({hasEsp32:document.getElementById('yaml-content').value.includes('esp32:'), hasVariant:document.getElementById('yaml-content').value.includes('variant: esp32s3'), hasSda:document.getElementById('yaml-content').value.includes('i2c_sda: GPIO8'), hasRelay:document.getElementById('yaml-content').value.includes('relay_gpio: GPIO10'), status:document.getElementById('yaml-status').textContent})`);
+    const yamlStatus = await evaluate(`document.getElementById('yaml-status').dataset.status`);
+    report.checks.push({ name: 'ESPHome generation/validation result', result: yamlStatus, evidence: yamlCheck.status });
     check('ESPHome preview generated from fixture pin map', yamlCheck.hasEsp32 && yamlCheck.hasVariant && yamlCheck.hasSda && yamlCheck.hasRelay, JSON.stringify(yamlCheck));
-    if (!detected.esphome) check('missing ESPHome status is clear', /NOT TESTED/i.test(yamlCheck.status) && /not installed|not found|not available/i.test(yamlCheck.status), yamlCheck.status);
-    else pass('ESPHome CLI installed', `Detected ${detected.esphome}; compatibility validation status shown in preview.`);
+    if (!detected.esphome) { notTested('ESPHome compatibility validation', 'ESPHome CLI was not installed on this Windows runner.'); check('missing ESPHome status is clear', yamlStatus === 'NOT TESTED' && /not installed|not found|not available/i.test(yamlCheck.status), yamlCheck.status); }
     await click('yaml-cancel');
   } else {
     if (hasFixture) for (const name of ['Open PCB reports detected engine result or helpful missing-tool status', 'Check Circuit executes or identifies missing KiCad CLI', 'manufacturing action executes or identifies missing KiCad CLI', 'ESPHome preview generated for fixture']) fail(name, 'Skipped because packaged ESP32 fixture did not open.');

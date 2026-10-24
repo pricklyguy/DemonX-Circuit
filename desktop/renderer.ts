@@ -57,6 +57,7 @@ async function generateYaml() {
     currentYaml = preview.yaml; replacementDestination = undefined; replacementBackup = undefined;
     $('yaml-content').value = currentYaml;
     $('yaml-status').textContent = preview.message;
+    $('yaml-status').dataset.status = preview.status;
     $('yaml-dialog').showModal();
   } catch (e) { showResult({ status: 'FAIL', title: 'Generate ESPHome YAML', message: String(e) }); }
 }

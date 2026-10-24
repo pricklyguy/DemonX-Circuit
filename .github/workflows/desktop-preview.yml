@@ -90,6 +90,16 @@ jobs:
           Write-Output "PackagedExecutable=$appExe"
           & node desktop/acceptance.mjs "$appExe" (Join-Path $env:RUNNER_TEMP "desktop-acceptance")
 
+      - name: Expose packaged application screenshots for review
+        if: always()
+        shell: pwsh
+        run: |
+          $screenshots = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "desktop-acceptance") -Filter "desktop-*.png" -File -ErrorAction SilentlyContinue
+          foreach ($shot in $screenshots) {
+            $base64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($shot.FullName))
+            Write-Output ("DX_PACKAGED_SCREENSHOT:$($shot.Name):$base64")
+          }
+
       - name: Upload Windows preview and runtime diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
