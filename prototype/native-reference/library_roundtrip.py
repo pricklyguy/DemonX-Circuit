@@ -46,12 +46,20 @@ with tempfile.TemporaryDirectory(prefix="demonx-library-roundtrip-") as tmp:
     if actual != expected:
         raise RuntimeError("Library reimport content hashes differ from exported content")
 
-    symbol_dir = tmp / "symbols"
-    symbol_dir.mkdir()
     cli = os.environ.get("KICAD_CLI", "kicad-cli")
     import subprocess
-    result = subprocess.run([cli, "sym", "export", "svg", "--output", str(symbol_dir), "--symbol", NAME, str(imported / "DemonX_User.kicad_sym")], capture_output=True, text=True)
-    symbol_files = list(symbol_dir.glob("*.svg"))
+    normalized_library = tmp / "DemonX_User-native.kicad_sym"
+    upgraded = subprocess.run(
+        [cli, "sym", "upgrade", "--force", "--output", str(normalized_library), str(imported / "DemonX_User.kicad_sym")],
+        capture_output=True, text=True,
+    )
+    if upgraded.returncode != 0 or not normalized_library.is_file():
+        raise RuntimeError(f"KiCad could not parse/re-export the imported symbol library: {upgraded.stdout}\n{upgraded.stderr}")
+
+    symbol_dir = tmp / "symbols"
+    symbol_dir.mkdir()
+    result = subprocess.run([cli, "sym", "export", "svg", "--output", str(symbol_dir), str(normalized_library)], capture_output=True, text=True)
+    symbol_files = list(symbol_dir.glob(f"{NAME}.svg"))
     if result.returncode != 0 or len(symbol_files) != 1:
         raise RuntimeError(f"KiCad could not parse the imported symbol library: {result.stdout}\n{result.stderr}")
     symbol_svg = symbol_files[0]

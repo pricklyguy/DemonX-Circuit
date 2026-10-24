@@ -87,8 +87,16 @@ jobs:
           name: demonx-circuit-windows-preview-0.3.0
           path: |
             build/DemonX-Circuit-Windows-Preview-0.3.0.zip
-            reports/checkpoint-3/desktop-preview.png
             ${{ runner.temp }}/electron-capture.stdout.log
             ${{ runner.temp }}/electron-capture.stderr.log
           if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload real Electron screenshot separately
+        if: always() && steps.capture.outputs.capture_status == 'PASS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: demonx-circuit-real-window-screenshot-0.3.0
+          path: reports/checkpoint-3/desktop-preview.png
+          if-no-files-found: error
           retention-days: 30
