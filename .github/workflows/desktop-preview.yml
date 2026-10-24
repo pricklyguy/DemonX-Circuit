@@ -1,0 +1,94 @@
+name: DemonX Circuit Windows desktop preview
+
+on:
+  push:
+    branches: [codex/demonx-circuit-foundation]
+    paths:
+      - ".github/workflows/desktop-preview.yml"
+      - "desktop/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prototype/generate-esphome.mjs"
+      - "examples/esp32-sensor/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-preview:
+    runs-on: windows-2022
+    steps:
+      - name: Check out approved feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js 24.19.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.19.0
+          cache: npm
+
+      - name: Install locked project-local dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Ensure pinned Electron runtime is present locally
+        run: node node_modules/electron/install.js
+
+      - name: Compile TypeScript renderer and preload
+        run: npm run build
+
+      - name: Attempt real Electron renderer capture
+        id: capture
+        shell: pwsh
+        run: |
+          $stdoutLog = Join-Path $env:RUNNER_TEMP "electron-capture.stdout.log"
+          $stderrLog = Join-Path $env:RUNNER_TEMP "electron-capture.stderr.log"
+          $proc = Start-Process -FilePath (Join-Path (Get-Location).Path "node_modules/electron/dist/electron.exe") `
+            -ArgumentList @(".", "--capture-screenshot") -WorkingDirectory (Get-Location).Path `
+            -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          $null = Wait-Process -Id $proc.Id -Timeout 45 -ErrorAction SilentlyContinue
+          $proc.Refresh()
+          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          $status = if (Test-Path "reports/checkpoint-3/desktop-preview.png") { "PASS" } else { "FAIL" }
+          "capture_status=$status" >> $env:GITHUB_OUTPUT
+          "Electron exited: $($proc.HasExited); exit code: $($proc.ExitCode)" | Out-File -Append $stdoutLog
+          Get-Content $stdoutLog,$stderrLog -ErrorAction SilentlyContinue
+
+      - name: Assemble portable Windows preview folder
+        shell: pwsh
+        run: |
+          $bundle = Join-Path (Get-Location).Path "build/windows-preview/DemonX-Circuit"
+          $appRoot = Join-Path $bundle "resources/app"
+          New-Item -ItemType Directory -Force $appRoot | Out-Null
+          Copy-Item "node_modules/electron/dist/*" $bundle -Recurse -Force
+          Copy-Item "node_modules/electron/dist/electron.exe" (Join-Path $bundle "DemonX Circuit.exe") -Force
+          Copy-Item package.json $appRoot -Force
+          New-Item -ItemType Directory -Force "$appRoot/desktop/dist" | Out-Null
+          New-Item -ItemType Directory -Force "$appRoot/desktop" | Out-Null
+          Copy-Item desktop/main.cjs "$appRoot/desktop/main.cjs" -Force
+          Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
+          Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
+          Copy-Item prototype "$appRoot/prototype" -Recurse -Force
+          Copy-Item examples "$appRoot/examples" -Recurse -Force
+          @'
+          DemonX Circuit Preview 0.3.0
+
+          Launch with "DemonX Circuit.exe". This portable preview does not install software or modify PATH/registry.
+          KiCad 10.0.7 must be installed separately for native schematic, PCB, ERC/DRC, and manufacturing operations.
+          ESPHome CLI must be installed separately to validate the generated YAML. This preview does not deploy firmware.
+          AI/MCP, Forge, and CNC handoffs are not implemented in this preview.
+          '@ | Set-Content "$bundle/README.txt"
+          Compress-Archive -Path "$bundle/*" -DestinationPath build/DemonX-Circuit-Windows-Preview-0.3.0.zip -Force
+
+      - name: Upload Windows preview and screenshot if available
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: demonx-circuit-windows-preview-0.3.0
+          path: |
+            build/DemonX-Circuit-Windows-Preview-0.3.0.zip
+            reports/checkpoint-3/desktop-preview.png
+            ${{ runner.temp }}/electron-capture.stdout.log
+            ${{ runner.temp }}/electron-capture.stderr.log
+          if-no-files-found: warn
+          retention-days: 30
