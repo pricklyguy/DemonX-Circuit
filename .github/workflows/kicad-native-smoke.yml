@@ -72,16 +72,32 @@ jobs:
                 examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
               python3 prototype/native-reference/verify_netlist.py \
                 reports/native-reference/DX_ESP32_Sensor.net
-              kicad-cli sch erc --severity-all --exit-code-violations \
+              if kicad-cli sch erc --severity-all --exit-code-violations \
                 --output reports/native-reference/erc.rpt \
-                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch; then
+                reference_erc_status=0
+              else
+                reference_erc_status=$?
+              fi
               cat reports/native-reference/erc.rpt
+              if [[ "$reference_erc_status" -ne 0 ]]; then
+                echo "FAIL: Native ESP32 schematic ERC reported violations (exit $reference_erc_status)." >&2
+                exit "$reference_erc_status"
+              fi
               kicad-cli sch upgrade --force \
                 examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
-              kicad-cli sch erc --severity-all --exit-code-violations \
+              if kicad-cli sch erc --severity-all --exit-code-violations \
                 --output reports/native-reference/erc-reopened.rpt \
-                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch
+                examples/esp32-sensor/native/DX_ESP32_Sensor.kicad_sch; then
+                reference_erc_reopened_status=0
+              else
+                reference_erc_reopened_status=$?
+              fi
               cat reports/native-reference/erc-reopened.rpt
+              if [[ "$reference_erc_reopened_status" -ne 0 ]]; then
+                echo "FAIL: Reopened ESP32 schematic ERC reported violations (exit $reference_erc_reopened_status)." >&2
+                exit "$reference_erc_reopened_status"
+              fi
               echo "PASS: Native ESP32 reference schematic generated, netlisted, ERC-checked, and reopened."
             '
 
