@@ -129,7 +129,11 @@ async function initialize() {
   const kicad = env.kicad ? `KiCad CLI available` : 'KiCad CLI not found';
   const editor = env.kicadEditor ? 'KiCad editor available' : 'KiCad editor not found';
   const esphome = env.esphome ? `ESPHome available (${env.esphome})` : 'ESPHome not found';
-  $('engine-status').textContent = `${kicad} · ${esphome}`;
+  $('engine-status').textContent = env.kicad && env.esphome ? 'Native tools ready' : 'Some native tools missing';
+  $('kicad-availability').textContent = env.kicad ? 'AVAILABLE' : 'NOT FOUND';
+  $('kicad-availability').className = `tag ${env.kicad ? 'available' : 'unavailable'}`;
+  $('esphome-availability').textContent = env.esphome ? 'AVAILABLE' : 'NOT FOUND';
+  $('esphome-availability').className = `tag ${env.esphome ? 'available' : 'unavailable'}`;
   $('engine-status').classList.toggle('tools-missing', !env.kicad || !env.esphome);
   $('engine-status').title = `${editor} (${env.kicadEditor || 'not detected'})\n${kicad} (${env.kicad || 'not detected'})\n${esphome}`;
   $('settings-tools').textContent = `${editor}${env.kicadEditor ? ` (${env.kicadEditor})` : ''}. ${kicad}${env.kicad ? ` (${env.kicad})` : ''}. ${esphome}${env.esphome ? ` (${env.esphome})` : ''}. Install tools separately; Circuit does not modify system configuration.`;

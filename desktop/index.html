@@ -65,9 +65,13 @@
           </section>
           <section class="card suite-card">
             <div class="section-head"><div><div class="eyebrow">DEMONX SUITE</div><h2>Connected tools</h2></div></div>
-            <div class="tool-row"><span class="tool-icon">▤</span><span><strong>Forge enclosure handoff</strong><small>Unavailable until implemented</small></span><span class="tag unavailable">LATER</span></div>
-            <div class="tool-row"><span class="tool-icon">⌁</span><span><strong>CNC board milling</strong><small>Gerber-to-DXF handoff unavailable</small></span><span class="tag unavailable">LATER</span></div>
-            <p class="card-hint">KiCad and ESPHome are detected from this computer. Manage the separate tool installations in Settings.</p>
+            <div class="tool-grid">
+              <div class="tool-status"><strong>KiCad CLI</strong><span id="kicad-availability" class="tag unavailable">CHECKING</span></div>
+              <div class="tool-status"><strong>ESPHome CLI</strong><span id="esphome-availability" class="tag unavailable">CHECKING</span></div>
+              <div class="tool-status"><strong>Forge handoff</strong><span class="tag unavailable">UNAVAILABLE</span></div>
+              <div class="tool-status"><strong>CNC handoff</strong><span class="tag unavailable">UNAVAILABLE</span></div>
+            </div>
+            <p class="card-hint">Statuses reflect this computer. Manage optional native tools in Settings.</p>
           </section>
           <section class="card components-card">
             <div class="section-head"><div><div class="eyebrow">RECENT PROJECTS</div><h2>On this computer</h2></div></div>

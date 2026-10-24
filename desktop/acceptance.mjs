@@ -142,6 +142,9 @@ try {
   const detected = await evaluate('window.circuit.getEnvironment()');
   report.diagnostics.push({ kind: 'installed-native-tools', ...detected });
   check('native tool detection reflects installed tools', (typeof detected.kicad === 'string' || detected.kicad === null) && (typeof detected.kicadEditor === 'string' || detected.kicadEditor === null) && (typeof detected.esphome === 'string' || detected.esphome === null), JSON.stringify(detected));
+  await waitUntil(`document.getElementById('kicad-availability').textContent === ${JSON.stringify(detected.kicad ? 'AVAILABLE' : 'NOT FOUND')} && document.getElementById('esphome-availability').textContent === ${JSON.stringify(detected.esphome ? 'AVAILABLE' : 'NOT FOUND')}`, 'tool availability shown in dashboard');
+  const toolUi = await evaluate(`({summary:document.getElementById('engine-status').textContent,kicad:document.getElementById('kicad-availability').textContent,esphome:document.getElementById('esphome-availability').textContent})`);
+  check('dashboard shows KiCad and ESPHome availability', toolUi.kicad === (detected.kicad ? 'AVAILABLE' : 'NOT FOUND') && toolUi.esphome === (detected.esphome ? 'AVAILABLE' : 'NOT FOUND'), JSON.stringify(toolUi));
   const initialTheme = await evaluate('document.body.dataset.theme');
   check('packaged app starts in its stored theme', initialTheme === 'dark' || initialTheme === 'light', `Initial theme=${initialTheme}`);
   await screenshot(`desktop-${initialTheme}.png`);
