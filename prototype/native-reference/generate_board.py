@@ -45,13 +45,16 @@ component_data = {}
 for comp in root.findall("./components/comp"):
     reference = comp.get("ref")
     footprint = comp.findtext("footprint")
-    if not footprint or ":" not in footprint:
-        raise RuntimeError(f"Missing KiCad footprint assignment for {reference}")
-    component_data[reference] = {"footprint": footprint, "value": comp.findtext("value", default="")}
-missing = sorted(set(component_data) - set(PLACEMENTS))
-unknown = sorted(set(PLACEMENTS) - set(component_data))
-if missing or unknown:
-    raise RuntimeError(f"Placement map mismatch; missing={missing}, unknown={unknown}")
+    component_data[reference] = {"footprint": footprint or "", "value": comp.findtext("value", default="")}
+    # Schematic-only markers such as PWR_FLAG correctly have no PCB footprint.
+    # Every physical component still must have exactly one explicit placement.
+    if reference not in PLACEMENTS and footprint:
+        raise RuntimeError(f"Footprinted component {reference} has no explicit board placement")
+    if reference in PLACEMENTS and (not footprint or ":" not in footprint):
+        raise RuntimeError(f"Missing KiCad footprint assignment for placed component {reference}")
+missing = sorted(set(PLACEMENTS) - set(component_data))
+if missing:
+    raise RuntimeError(f"Placement map references unknown schematic components: {missing}")
 
 board = pcbnew.BOARD()
 board.GetDesignSettings().SetCopperLayerCount(2)
@@ -83,6 +86,11 @@ for net in root.findall("./nets/net"):
     net_nodes[name] = [(node.get("ref"), node.get("pin")) for node in net.findall("node")]
 for net_name, nodes in net_nodes.items():
     for reference, number in nodes:
+        if reference not in component_data:
+            raise RuntimeError(f"KiCad netlist references unknown component {reference} on {net_name}")
+        if reference not in footprints:
+            # Ignore schematic-only nodes while preserving their net's physical pads.
+            continue
         pad = footprints[reference].FindPadByNumber(number)
         if pad is None:
             raise RuntimeError(f"KiCad footprint {reference} has no pad {number} for net {net_name}")
