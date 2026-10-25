@@ -146,6 +146,11 @@ async function dragCanvas(from, to) {
   await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(100);
 }
+async function saveEditorRevision(description) {
+  const previous = await evaluate(`document.getElementById('schematic-status').textContent`);
+  await click('schematic-save');
+  await waitUntil(`document.getElementById('schematic-status').textContent !== ${JSON.stringify(previous)}`, description, 10000);
+}
 async function stopPackagedApp(context) {
   if (!child || child.exitCode !== null) return;
   markStage(`stop-packaged-app: ${context}`);
@@ -286,40 +291,50 @@ try {
     await click('schematic-add');
     await waitUntil(`document.getElementById('component-picker').open`, 'open component search dialog');
     await clickSelector('.component-choice');
+    await saveEditorRevision('save newly placed component revision');
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('component picker adds a real library component', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
     await click('schematic-undo');
+    await saveEditorRevision('save undo revision');
     const afterUndo = await evaluate('window.circuit.loadSchematicModel()');
     check('undo removes component addition', afterUndo?.components?.length === 3 && !afterUndo.components.some(c => c.reference === 'J2'), JSON.stringify(afterUndo?.components?.map(c => c.reference)));
     await click('schematic-redo');
+    await saveEditorRevision('save redo revision');
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('redo restores component addition', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
 
     const componentCenter = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
     await clickCanvasAt(componentCenter.x, componentCenter.y);
     await click('schematic-rotate');
+    await saveEditorRevision('save rotation revision');
     let rotatedModel = await evaluate('window.circuit.loadSchematicModel()');
     check('mouse selection and Rotate action update component orientation', rotatedModel?.components?.find(c => c.reference === 'J2')?.rotation === 90, JSON.stringify(rotatedModel?.components?.find(c => c.reference === 'J2')));
     await click('schematic-undo');
+    await saveEditorRevision('save rotation undo revision');
     const undoneRotation = await evaluate('window.circuit.loadSchematicModel()');
     check('undo restores prior component orientation', undoneRotation?.components?.find(c => c.reference === 'J2')?.rotation === 0, JSON.stringify(undoneRotation?.components?.find(c => c.reference === 'J2')));
     await click('schematic-redo');
+    await saveEditorRevision('save rotation redo revision');
     const redoneRotation = await evaluate('window.circuit.loadSchematicModel()');
     check('redo restores rotated component orientation', redoneRotation?.components?.find(c => c.reference === 'J2')?.rotation === 90, JSON.stringify(redoneRotation?.components?.find(c => c.reference === 'J2')));
     await click('schematic-delete');
+    await saveEditorRevision('save delete revision');
     const deletedComponent = await evaluate('window.circuit.loadSchematicModel()');
     check('Delete removes selected component', deletedComponent?.components?.length === 3 && !deletedComponent.components.some(c => c.reference === 'J2'), JSON.stringify(deletedComponent?.components?.map(c => c.reference)));
     await click('schematic-undo');
+    await saveEditorRevision('save delete undo revision');
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('undo restores deleted component', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
     const resetJ2 = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
     await clickCanvasAt(resetJ2.x, resetJ2.y);
     for (let i = 0; i < 3; i++) await click('schematic-rotate');
+    await saveEditorRevision('save orientation reset revision');
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('rotation returns to supported zero-degree orientation', editorModel?.components?.find(c => c.reference === 'J2')?.rotation === 0, JSON.stringify(editorModel?.components?.find(c => c.reference === 'J2')));
     const beforeDrag = editorModel.components.find(c => c.reference === 'J2');
     const dragStart = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
     await dragCanvas(dragStart, { x: dragStart.x + 34, y: dragStart.y });
+    await saveEditorRevision('save dragged component revision');
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('drag placement snaps to model grid and retains component identity', editorModel?.components?.find(c => c.reference === 'J2')?.x === beforeDrag.x + 2 && editorModel?.components?.find(c => c.reference === 'J2')?.id === beforeDrag.id, JSON.stringify({ before: beforeDrag, after: editorModel?.components?.find(c => c.reference === 'J2') }));
 
@@ -335,6 +350,7 @@ try {
     if (wireTargets?.from && wireTargets?.to && wireTargets.from.x >= 0 && wireTargets.to.x < wireTargets.viewport.w && wireTargets.from.y >= 0 && wireTargets.to.y < wireTargets.viewport.h) {
       await clickCanvasAt(wireTargets.from.x, wireTargets.from.y);
       await clickCanvasAt(wireTargets.to.x, wireTargets.to.y);
+      await saveEditorRevision('save pin-to-pin wire revision');
       const wiredModel = await evaluate('window.circuit.loadSchematicModel()');
       check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has('pin:component-input-01:1') && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${wiredModel.components.find(c => c.reference === 'J2')?.id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
