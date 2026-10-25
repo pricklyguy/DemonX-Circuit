@@ -72,6 +72,8 @@ jobs:
         run: npm run test:native-roundtrip
 
       - name: Test the official MCP SDK read-only server
+        env:
+          DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke
         run: npm run test:mcp
 
       - name: Provision KiCad 10.0.7 on the disposable Windows runner
