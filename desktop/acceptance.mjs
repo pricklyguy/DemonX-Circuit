@@ -128,6 +128,24 @@ async function clickSelector(selector) {
   if (!clicked) throw new Error(`Mouse click was not dispatched to the page for ${selector}: ${JSON.stringify(rect)}`);
   report.diagnostics.push({ kind: 'mouse-click', selector, ...rect, dispatched: clicked });
 }
+async function clickCanvasAt(x, y) {
+  await cdp('Page.bringToFront');
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+  await sleep(100);
+}
+async function dragCanvas(from, to) {
+  await cdp('Page.bringToFront');
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1 });
+  for (let step = 1; step <= 5; step++) {
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + (to.x - from.x) * step / 5, y: from.y + (to.y - from.y) * step / 5, button: 'left', buttons: 1 });
+    await sleep(25);
+  }
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 });
+  await sleep(100);
+}
 async function stopPackagedApp(context) {
   if (!child || child.exitCode !== null) return;
   markStage(`stop-packaged-app: ${context}`);
@@ -252,6 +270,88 @@ try {
     await waitUntil(`document.getElementById('project-id')?.textContent !== ${JSON.stringify(firstProjectId)}`, 'repeated project name creates a new native project', 120000);
     const repeatedFiles = ['DemonX-Circuit-Project-2.kicad_pro', 'DemonX-Circuit-Project-2.kicad_sch', 'DemonX-Circuit-Project-2.kicad_pcb'].map(name => ({ name, exists: existsSync(join(projectRoot, 'DemonX-Circuit-Project-2', name)) }));
     check('repeated project creation preserves the existing folder and creates a native suffixed project', repeatedFiles.every(file => file.exists) && existsSync(join(createdProjectPath, 'DemonX-Circuit-Project.kicad_pcb')), JSON.stringify(repeatedFiles));
+
+    // Exercise the editor in the extracted package with real CDP mouse input.
+    // This is the DemonX sidecar model editor; native KiCad schematic export
+    // remains explicitly out of scope for this checkpoint.
+    const editorProjectPath = join(projectRoot, 'DemonX-Circuit-Project-2');
+    const nativeSchematicPath = join(editorProjectPath, 'DemonX-Circuit-Project-2.kicad_sch');
+    const nativeSchematicBefore = await readFile(nativeSchematicPath);
+    await click('open-circuit-schematic');
+    await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'open packaged DemonX schematic workspace');
+    let editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('new native project opens its saved DemonX schematic sidecar', !!editorModel && editorModel.components.length === 3 && editorModel.wires.length === 3, JSON.stringify({ components: editorModel?.components?.length, wires: editorModel?.wires?.length }));
+    await screenshot('schematic-editor-initial.png');
+
+    await click('schematic-add');
+    await waitUntil(`document.getElementById('component-picker').open`, 'open component search dialog');
+    await clickSelector('.component-choice');
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('component picker adds a real library component', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
+    await click('schematic-undo');
+    const afterUndo = await evaluate('window.circuit.loadSchematicModel()');
+    check('undo removes component addition', afterUndo?.components?.length === 3 && !afterUndo.components.some(c => c.reference === 'J2'), JSON.stringify(afterUndo?.components?.map(c => c.reference)));
+    await click('schematic-redo');
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('redo restores component addition', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
+
+    const componentCenter = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+    await clickCanvasAt(componentCenter.x, componentCenter.y);
+    await click('schematic-rotate');
+    let rotatedModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('mouse selection and Rotate action update component orientation', rotatedModel?.components?.find(c => c.reference === 'J2')?.rotation === 90, JSON.stringify(rotatedModel?.components?.find(c => c.reference === 'J2')));
+    await click('schematic-undo');
+    const undoneRotation = await evaluate('window.circuit.loadSchematicModel()');
+    check('undo restores prior component orientation', undoneRotation?.components?.find(c => c.reference === 'J2')?.rotation === 0, JSON.stringify(undoneRotation?.components?.find(c => c.reference === 'J2')));
+    await click('schematic-redo');
+    const redoneRotation = await evaluate('window.circuit.loadSchematicModel()');
+    check('redo restores rotated component orientation', redoneRotation?.components?.find(c => c.reference === 'J2')?.rotation === 90, JSON.stringify(redoneRotation?.components?.find(c => c.reference === 'J2')));
+    await click('schematic-delete');
+    const deletedComponent = await evaluate('window.circuit.loadSchematicModel()');
+    check('Delete removes selected component', deletedComponent?.components?.length === 3 && !deletedComponent.components.some(c => c.reference === 'J2'), JSON.stringify(deletedComponent?.components?.map(c => c.reference)));
+    await click('schematic-undo');
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('undo restores deleted component', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
+    const resetJ2 = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+    await clickCanvasAt(resetJ2.x, resetJ2.y);
+    for (let i = 0; i < 3; i++) await click('schematic-rotate');
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('rotation returns to supported zero-degree orientation', editorModel?.components?.find(c => c.reference === 'J2')?.rotation === 0, JSON.stringify(editorModel?.components?.find(c => c.reference === 'J2')));
+    const beforeDrag = editorModel.components.find(c => c.reference === 'J2');
+    const dragStart = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+    await dragCanvas(dragStart, { x: dragStart.x + 34, y: dragStart.y });
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('drag placement snaps to model grid and retains component identity', editorModel?.components?.find(c => c.reference === 'J2')?.x === beforeDrag.x + 2 && editorModel?.components?.find(c => c.reference === 'J2')?.id === beforeDrag.id, JSON.stringify({ before: beforeDrag, after: editorModel?.components?.find(c => c.reference === 'J2') }));
+
+    await click('schematic-wire');
+    const wireTargets = await evaluate(`(async() => {
+      const m = await window.circuit.loadSchematicModel(); const container = document.getElementById('schematic-stage'); const rect = container.getBoundingClientRect();
+      const width = container.clientWidth, height = container.clientHeight, scale = 0.85;
+      const find = (ref, number) => { const c = m.components.find(item => item.reference === ref), p = c?.pins.find(item => item.number === number); if (!c || !p) return null;
+        let x=p.x,y=p.y; for(let i=0;i<c.rotation/90;i++) [x,y]=[-y,x];
+        return {x:rect.left+width/2-50*20*scale+(c.x+x)*20*scale,y:rect.top+height/2-40*20*scale+(c.y+y)*20*scale}; };
+      return { from:find('J1','1'), to:find('J2','1'), wires:m.wires.length, viewport:{w:innerWidth,h:innerHeight} };
+    })()`);
+    if (wireTargets?.from && wireTargets?.to && wireTargets.from.x >= 0 && wireTargets.to.x < wireTargets.viewport.w && wireTargets.from.y >= 0 && wireTargets.to.y < wireTargets.viewport.h) {
+      await clickCanvasAt(wireTargets.from.x, wireTargets.from.y);
+      await clickCanvasAt(wireTargets.to.x, wireTargets.to.y);
+      const wiredModel = await evaluate('window.circuit.loadSchematicModel()');
+      check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has('pin:component-input-01:1') && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${wiredModel.components.find(c => c.reference === 'J2')?.id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
+    } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
+
+    await click('schematic-save');
+    await waitUntil(`document.getElementById('schematic-status').textContent.includes('Saved local DemonX revision')`, 'save editor changes to append-only revision');
+    let savedModel = await evaluate('window.circuit.loadSchematicModel()');
+    const revisions = await import('node:fs/promises').then(fs => fs.readdir(join(editorProjectPath, 'schematic-circuit', 'revisions'))).catch(() => []);
+    check('schematic save writes a new local revision and preserves the native KiCad file', revisions.length >= 2 && (await readFile(nativeSchematicPath)).equals(nativeSchematicBefore), JSON.stringify({ revisions, nativeSchematicUnchanged: (await readFile(nativeSchematicPath)).equals(nativeSchematicBefore) }));
+    await click('schematic-back');
+    await waitUntil(`document.getElementById('schematic-workspace').classList.contains('hidden')`, 'return to project dashboard');
+    await click('open-circuit-schematic');
+    await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen DemonX schematic workspace');
+    const reopenedModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('save/reopen preserves edited semantic connectivity', JSON.stringify(savedModel) === JSON.stringify(reopenedModel) && reopenedModel?.components?.length === 4 && reopenedModel?.wires?.length === 4, JSON.stringify({ components: reopenedModel?.components?.length, wires: reopenedModel?.wires?.length }));
+    await screenshot('schematic-editor-reopened.png');
+    await click('schematic-back');
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
 
   const fixtureId = 'dx-esp32-bme280-relay-demo';

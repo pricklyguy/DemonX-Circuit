@@ -27,7 +27,7 @@
         </div>
       </header>
 
-      <section class="welcome">
+      <section id="welcome" class="welcome">
         <div class="welcome-copy">
           <div class="eyebrow accent">CIRCUIT DESIGN WORKSPACE</div>
           <h2 id="welcome-title">Start with an idea.</h2>
@@ -36,7 +36,7 @@
         <div class="workflow-note"><span class="step-number">01</span><span>Concept <b>→</b> Circuit <b>→</b> Board</span></div>
       </section>
 
-      <section class="workspace-grid">
+      <section id="workspace-grid" class="workspace-grid">
         <section class="card project-card" aria-labelledby="project-name">
           <div class="section-head"><div><div class="eyebrow">PROJECT</div><h2 id="project-name">No project open</h2></div><span id="project-state" class="tag neutral">READY</span></div>
           <div id="empty-project" class="empty-state"><div class="empty-symbol">DX</div><h3>Your next circuit starts here</h3><p>Use New Project or Open Project above. A starter project stores portable metadata and leaves design files in your control.</p></div>
@@ -44,6 +44,7 @@
             <div class="meta-grid"><div><span>PROJECT ID</span><strong id="project-id">—</strong></div><div><span>REVISION</span><strong id="project-revision">—</strong></div><div class="wide"><span>NATIVE DESIGN</span><strong id="native-status">—</strong></div></div>
             <div class="section-label">DESIGN ACTIONS</div>
             <div class="action-grid">
+              <button id="open-circuit-schematic" class="workflow-action" disabled><span class="action-icon">⌁</span><span><strong>Edit Schematic in Circuit</strong><small>Native files stay unchanged; save local DemonX revisions</small></span><b>→</b></button>
               <button id="open-schematic" class="workflow-action"><span class="action-icon">⌗</span><span><strong>Open Schematic in KiCad</strong><small>Use KiCad’s native editor</small></span><b>↗</b></button>
               <button id="open-pcb" class="workflow-action"><span class="action-icon">▦</span><span><strong>Open PCB in KiCad</strong><small>Placement and routing</small></span><b>↗</b></button>
               <button id="check-circuit" class="workflow-action"><span class="action-icon">✓</span><span><strong>Check Circuit</strong><small>Run native ERC and DRC</small></span><b>→</b></button>
@@ -79,6 +80,33 @@
           </section>
         </aside>
       </section>
+      <section id="schematic-workspace" class="schematic-workspace hidden" aria-label="Schematic editor">
+        <div class="schematic-toolbar">
+          <button id="schematic-back" class="button secondary">← Project</button>
+          <div class="schematic-toolbar-title"><div class="eyebrow">DEMONX SCHEMATIC EDITOR</div><strong>LED and resistor starter</strong></div>
+          <div class="schematic-tools">
+            <button id="schematic-add" class="button secondary">Add Component</button>
+            <button id="schematic-select" class="button secondary active">Select</button>
+            <button id="schematic-wire" class="button secondary">Wire</button>
+            <button id="schematic-rotate" class="button secondary">Rotate</button>
+            <button id="schematic-delete" class="button secondary">Delete</button>
+            <button id="schematic-undo" class="button secondary" disabled>Undo</button>
+            <button id="schematic-redo" class="button secondary" disabled>Redo</button>
+            <button id="schematic-save" class="button primary">Save Revision</button>
+          </div>
+        </div>
+        <div class="schematic-body">
+          <div class="schematic-canvas-shell">
+            <div class="schematic-canvas-toolbar">
+              <span>50 mil grid <i>·</i> 1.27 mm <i>·</i> scroll to zoom <i>·</i> Space + drag to pan</span>
+              <div><button id="schematic-zoom-out" class="icon-button" aria-label="Zoom out">−</button><button id="schematic-zoom-in" class="icon-button" aria-label="Zoom in">＋</button><button id="schematic-fit" class="button secondary">Fit</button></div>
+            </div>
+            <div id="schematic-stage" class="schematic-stage" aria-label="Interactive schematic canvas"></div>
+            <div id="schematic-status" class="schematic-status" role="status">Loading schematic…</div>
+          </div>
+          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Component details</h2><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component to see its details.</div></div><div class="schematic-engine-note"><strong>Native KiCad export is not connected to this editor yet.</strong><p>Edits save as immutable DemonX schematic revisions. The original KiCad files are not modified. Run checks and open the native design in KiCad using the project actions.</p></div></aside>
+        </div>
+      </section>
       <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
     </main>
   </div>
@@ -86,6 +114,7 @@
   <dialog id="result-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div id="result-kicker" class="eyebrow">OPERATION RESULT</div><h2 id="result-title">Result</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="result-message"></p><pre id="result-output" class="output"></pre><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>
+  <dialog id="component-picker" class="modal component-picker"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Add a component</h2></div><button class="close-button" aria-label="Close">×</button></div><input id="component-search" class="component-search" type="search" placeholder="Search resistors, LEDs, connectors…" autocomplete="off"><div id="component-choices" class="component-choices"></div><div class="modal-actions"><button class="button secondary">Cancel</button></div></form></dialog>
   <script src="./dist/renderer.js"></script>
 </body>
 </html>

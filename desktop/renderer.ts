@@ -1,3 +1,5 @@
+import { mount as mountSchematicEditor } from './schematic-editor';
+
 type IdTypeMap = { 'result-dialog': HTMLDialogElement; 'yaml-dialog': HTMLDialogElement; 'replace-dialog': HTMLDialogElement; 'settings-dialog': HTMLDialogElement; 'yaml-content': HTMLTextAreaElement };
 const $ = <K extends string>(id: K): K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement => document.getElementById(id) as K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement;
 let activeProject: ProjectSummary | null = null;
@@ -61,6 +63,7 @@ function updateProject(project: ProjectSummary | null) {
   $('check-circuit').toggleAttribute('disabled', !opened || (!project.files.schematic && !project.files.pcb));
   $('prepare-manufacturing').toggleAttribute('disabled', !project?.files.pcb);
   $('generate-esphome').toggleAttribute('disabled', !project?.capabilities.esphome);
+  $('open-circuit-schematic').toggleAttribute('disabled', !project?.files.schematic);
   void refreshRecentProjects();
 }
 async function act(action: () => Promise<OperationResult>) { try { showResult(await action()); } catch (error) { showResult({ status: 'FAIL', title: 'Operation failed', message: error instanceof Error ? error.message : String(error) }); } }
@@ -131,6 +134,18 @@ $('open-pcb').addEventListener('click', () => act(() => window.circuit.openNativ
 $('check-circuit').addEventListener('click', () => act(() => window.circuit.checkCircuit()));
 $('prepare-manufacturing').addEventListener('click', () => act(() => window.circuit.prepareManufacturing()));
 $('generate-esphome').addEventListener('click', generateYaml);
+$('open-circuit-schematic').addEventListener('click', async () => {
+  try {
+    if (!activeProject) throw new Error('Open or create a project first.');
+    const model = await window.circuit.loadSchematicModel();
+    if (!model) return showResult({ status: 'NOT TESTED', title: 'Open Circuit Schematic', message: 'This project has no DemonX schematic model yet. The native KiCad design remains available with Open Schematic in KiCad; no automatic import is attempted.' });
+    $('welcome').classList.add('hidden'); $('workspace-grid').classList.add('hidden'); $('schematic-workspace').classList.remove('hidden');
+    mountSchematicEditor(model as import('./schematic-model').SchematicDocument, async next => {
+      const saved = await window.circuit.saveSchematicModel(next);
+      return saved.revision;
+    });
+  } catch (error) { showResult({ status: 'FAIL', title: 'Open Circuit Schematic', message: error instanceof Error ? error.message : String(error) }); }
+});
 $('yaml-save').addEventListener('click', () => saveYaml(false));
 $('replace-cancel').addEventListener('click', () => { $('replace-dialog').close(); showResult({ status: 'CANCELLED', title: 'Replacement cancelled', message: `Original file was not changed. Backup retained at ${replacementBackup || 'the displayed backup path'}.` }); });
 $('replace-confirm').addEventListener('click', () => saveYaml(true));

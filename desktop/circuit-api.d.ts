@@ -28,6 +28,8 @@ interface CircuitApi {
   getRecentProjects(): Promise<Array<{ projectId: string; name: string; root: string }>>;
   openRecentProject(projectId: string): Promise<ProjectSummary>;
   inspectProject(): Promise<ProjectSummary | null>;
+  loadSchematicModel(): Promise<unknown | null>;
+  saveSchematicModel(model: unknown): Promise<{ revision: string; path: string; message: string }>;
   openNative(kind: "schematic" | "pcb"): Promise<OperationResult>;
   checkCircuit(): Promise<OperationResult>;
   prepareManufacturing(): Promise<OperationResult>;

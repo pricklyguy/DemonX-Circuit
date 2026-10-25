@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const { validateSchematic } = require('./dist/schematic-model.js');
 
 const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
 if (acceptanceRoot) {
@@ -252,6 +253,11 @@ register('project:new', async () => {
   await fs.mkdir(path.join(base, 'libraries', 'DemonX_Project.pretty'), { recursive: true });
   await fs.mkdir(path.join(base, 'reports'), { recursive: true });
   await fs.mkdir(path.join(base, 'manufacturing'), { recursive: true });
+  const schematicRevisionDir = path.join(base, 'schematic-circuit', 'revisions');
+  await fs.mkdir(schematicRevisionDir, { recursive: true });
+  const editableSchematic = path.join(repoRoot, 'examples', 'native-smoke', 'led-resistor.dxcircuit.json');
+  try { await fs.copyFile(editableSchematic, path.join(schematicRevisionDir, '000001-starter.json'), require('node:fs').constants.COPYFILE_EXCL); }
+  catch (error) { await fs.rm(base, { recursive: true, force: true }); throw new Error(`DemonX schematic starter model is unavailable (${path.basename(editableSchematic)}): ${error.message}.`); }
   const installTemplate = path.join(tools.kicadInstallDir, 'share', 'kicad', 'template');
   for (const table of ['sym-lib-table', 'fp-lib-table']) {
     const tableSource = path.join(installTemplate, table);
@@ -279,7 +285,7 @@ register('project:new', async () => {
     }
   }
   const projectId = `dx-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const manifest = { format: 'demonx-project', formatVersion: '0.2.0', projectId, name: projectName, revision: '0.1.0', libraries: [{ id: 'DemonX_Project', path: 'libraries/DemonX_Project.kicad_sym', footprints: 'libraries/DemonX_Project.pretty' }], native: { engine: 'kicad', engineVersion: tools.kicadVersion, files: [`${projectName}.kicad_pro`, `${projectName}.kicad_sch`, `${projectName}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'], status: 'Native LED/resistor starter project created and ERC/DRC checked by KiCad 10.0.7.' }, hardware: { components: [{ ref: 'J1', value: '5V INPUT', kind: 'connector' }, { ref: 'R1', value: '330', kind: 'resistor' }, { ref: 'D1', value: 'RED LED', kind: 'LED' }], nets: [{ name: '5V_IN' }, { name: 'GND' }], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
+  const manifest = { format: 'demonx-project', formatVersion: '0.2.0', projectId, name: projectName, revision: '0.1.0', editableSchematic: { format: 'demonx-schematic', revisions: 'schematic-circuit/revisions' }, libraries: [{ id: 'DemonX_Project', path: 'libraries/DemonX_Project.kicad_sym', footprints: 'libraries/DemonX_Project.pretty' }], native: { engine: 'kicad', engineVersion: tools.kicadVersion, files: [`${projectName}.kicad_pro`, `${projectName}.kicad_sch`, `${projectName}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'], status: 'Native LED/resistor starter project created and ERC/DRC checked by KiCad 10.0.7.' }, hardware: { components: [{ ref: 'J1', value: '5V INPUT', kind: 'connector' }, { ref: 'R1', value: '330', kind: 'resistor' }, { ref: 'D1', value: 'RED LED', kind: 'LED' }], nets: [{ name: '5V_IN' }, { name: 'GND' }], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
   await fs.writeFile(path.join(base, 'project.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
   activeProject = await summarize(base);
   await rememberProject(activeProject);
@@ -298,6 +304,39 @@ register('project:open-recent', async projectId => {
   return summary;
 });
 register('project:inspect', async () => activeProject ? summarize(activeProject.root) : null);
+register('schematic-model:load', async () => {
+  const project = ensureProject();
+  const directory = safeInside(project.root, 'schematic-circuit/revisions');
+  let entries;
+  try { entries = await fs.readdir(directory); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  const revisions = entries.filter(name => /^\d{6}-.+\.json$/i.test(name)).sort();
+  if (!revisions.length) return null;
+  const file = safeInside(project.root, `schematic-circuit/revisions/${revisions[revisions.length - 1]}`);
+  const text = await fs.readFile(file, 'utf8');
+  if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) throw new Error('The latest DemonX schematic revision is larger than the 2 MB safety limit.');
+  return JSON.parse(text);
+});
+register('schematic-model:save', async model => {
+  const project = ensureProject();
+  if (!model || typeof model !== 'object' || Array.isArray(model) || model.format !== 'demonx-schematic' || model.formatVersion !== 1 || model.gridMm !== 1.27 || !Array.isArray(model.components) || !Array.isArray(model.junctions) || !Array.isArray(model.wires) || !Array.isArray(model.labels)) throw new Error('Rejected malformed or unsupported DemonX schematic data.');
+  if (model.components.length > 1000 || model.junctions.length > 10000 || model.wires.length > 20000 || model.labels.length > 10000) throw new Error('Schematic exceeds the local editor safety limits.');
+  const validationIssues = validateSchematic(model);
+  if (validationIssues.length) throw new Error(`Schematic validation failed; no revision was saved. ${validationIssues.join(' ')}`);
+  const serialized = `${JSON.stringify(model, null, 2)}\n`;
+  if (Buffer.byteLength(serialized, 'utf8') > 2 * 1024 * 1024) throw new Error('Schematic exceeds the 2 MB local editor safety limit.');
+  const directory = safeInside(project.root, 'schematic-circuit/revisions');
+  await fs.mkdir(directory, { recursive: true });
+  const entries = await fs.readdir(directory);
+  const digest = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 12);
+  let revisionNumber = entries.reduce((highest, name) => { const match = /^(\d{6})-.+\.json$/i.exec(name); return match ? Math.max(highest, Number(match[1])) : highest; }, 0) + 1, revision, destination;
+  for (;;) {
+    revision = `${String(revisionNumber).padStart(6, '0')}-${digest}`;
+    destination = path.join(directory, `${revision}.json`);
+    try { await fs.writeFile(destination, serialized, { flag: 'wx' }); break; }
+    catch (error) { if (error.code !== 'EEXIST') throw error; revisionNumber++; }
+  }
+  return { revision, path: destination, message: 'Saved as a new immutable project revision. Existing schematic revisions were preserved.' };
+});
 register('native-tools:get', getNativeTools);
 register('theme:get', async () => {
   const prefs = await readPreferences();

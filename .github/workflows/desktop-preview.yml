@@ -2,7 +2,7 @@ name: DemonX Circuit Windows development preview
 
 on:
   push:
-    branches: [codex/demonx-circuit-foundation]
+    branches: [codex/demonx-circuit-foundation, codex/demonx-circuit-schematic-editor]
     paths:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
@@ -55,6 +55,12 @@ jobs:
 
       - name: Build the desktop renderer
         run: npm run build
+
+      - name: Test the DemonX schematic semantic model
+        run: npm run test:schematic-model
+
+      - name: Test the official MCP SDK read-only server
+        run: npm run test:mcp
 
       - name: Download the verified native starter from this workflow run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4

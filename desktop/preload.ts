@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("circuit", {
   getRecentProjects: () => ipcRenderer.invoke("project:recent"),
   openRecentProject: (projectId: string) => ipcRenderer.invoke("project:open-recent", projectId),
   inspectProject: () => ipcRenderer.invoke("project:inspect"),
+  loadSchematicModel: () => ipcRenderer.invoke("schematic-model:load"),
+  saveSchematicModel: (model: unknown) => ipcRenderer.invoke("schematic-model:save", model),
   openNative: (kind: "schematic" | "pcb") => ipcRenderer.invoke("native:open", kind),
   checkCircuit: () => ipcRenderer.invoke("circuit:check"),
   prepareManufacturing: () => ipcRenderer.invoke("manufacturing:prepare"),
