@@ -5,7 +5,8 @@ import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const adapter = require(resolve('desktop', 'kicad-schematic-adapter.cjs'));
-const sourcePath = resolve('examples', 'native-smoke', 'DX_LED_Smoke', 'DX_LED_Smoke.kicad_sch');
+const sourceDirectory = process.env.DEMONX_NATIVE_SMOKE_FIXTURE || resolve('examples', 'native-smoke', 'DX_LED_Smoke');
+const sourcePath = resolve(sourceDirectory, 'DX_LED_Smoke.kicad_sch');
 const originalText = await readFile(sourcePath, 'utf8');
 const sourceHash = adapter.digest(originalText);
 const imported = adapter.importKiCadSchematic(originalText);

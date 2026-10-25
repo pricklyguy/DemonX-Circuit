@@ -57,20 +57,22 @@ jobs:
       - name: Build the desktop renderer
         run: npm run build
 
-      - name: Test the DemonX schematic semantic model
-        run: npm run test:schematic-model
-
-      - name: Test constrained native schematic import and export
-        run: npm run test:native-roundtrip
-
-      - name: Test the official MCP SDK read-only server
-        run: npm run test:mcp
-
       - name: Download the verified native starter from this workflow run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: kicad-native-smoke-10.0.7
           path: build/native-fixture
+
+      - name: Test the DemonX schematic semantic model
+        run: npm run test:schematic-model
+
+      - name: Test constrained native schematic import and export
+        env:
+          DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke
+        run: npm run test:native-roundtrip
+
+      - name: Test the official MCP SDK read-only server
+        run: npm run test:mcp
 
       - name: Provision KiCad 10.0.7 on the disposable Windows runner
         shell: pwsh
