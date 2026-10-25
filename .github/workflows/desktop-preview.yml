@@ -60,6 +60,9 @@ jobs:
       - name: Test the DemonX schematic semantic model
         run: npm run test:schematic-model
 
+      - name: Test constrained native schematic import and export
+        run: npm run test:native-roundtrip
+
       - name: Test the official MCP SDK read-only server
         run: npm run test:mcp
 
@@ -112,6 +115,7 @@ jobs:
           New-Item -ItemType Directory -Force "$appRoot/desktop/dist" | Out-Null
           New-Item -ItemType Directory -Force "$appRoot/desktop" | Out-Null
           Copy-Item desktop/main.cjs "$appRoot/desktop/main.cjs" -Force
+          Copy-Item desktop/kicad-schematic-adapter.cjs "$appRoot/desktop/kicad-schematic-adapter.cjs" -Force
           Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
           Copy-Item desktop/assets "$appRoot/desktop/assets" -Recurse -Force

@@ -3,7 +3,7 @@ export type SchematicComponent = { id: string; libId: string; reference: string;
 export type SchematicJunction = { id: string; x: number; y: number };
 export type SchematicWire = { id: string; fromNodeId: string; toNodeId: string };
 export type SchematicLabel = { id: string; nodeId: string; name: string };
-export type SchematicDocument = { format: 'demonx-schematic'; formatVersion: 1; name: string; gridMm: 1.27; components: SchematicComponent[]; junctions: SchematicJunction[]; wires: SchematicWire[]; labels: SchematicLabel[] };
+export type SchematicDocument = { format: 'demonx-schematic'; formatVersion: 1; name: string; gridMm: 1.27; components: SchematicComponent[]; junctions: SchematicJunction[]; wires: SchematicWire[]; labels: SchematicLabel[]; nativeSync?: { sourceSha256: string; sourceFormat?: string } };
 export type DerivedNet = { id: string; name: string | null; pins: Array<{ componentId: string; reference: string; pinNumber: string; pinName: string }> };
 
 export const COMPONENT_LIBRARY: Array<{ libId: string; name: string; category: string; pins: PinDefinition[] }> = [
@@ -79,6 +79,7 @@ export function deriveNets(document: SchematicDocument): DerivedNet[] {
 export function validateSchematic(document: SchematicDocument): string[] {
   const errors: string[] = [];
   if (document.format !== 'demonx-schematic' || document.formatVersion !== 1 || document.gridMm !== 1.27) errors.push('Unsupported DemonX schematic format or grid.');
+  if (document.nativeSync !== undefined && (!document.nativeSync || typeof document.nativeSync.sourceSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(document.nativeSync.sourceSha256))) errors.push('Native schematic source revision hash is malformed.');
   const componentIds = new Set<string>(), references = new Set<string>(), nodeIds = new Set<string>();
   for (const component of document.components) {
     if (!component.id || componentIds.has(component.id)) errors.push(`Duplicate or missing component ID: ${component.id}`);

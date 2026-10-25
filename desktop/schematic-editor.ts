@@ -5,15 +5,18 @@ const GRID = 20;
 const MIN_SCALE = 0.45;
 const MAX_SCALE = 2.6;
 type SaveSchematic = (document: SchematicDocument) => Promise<string>;
+type StageNative = (document: SchematicDocument) => Promise<OperationResult & { stageId?: string; sourceSha256?: string; candidateSha256?: string }>;
 
 let documentModel: SchematicDocument | null = null;
 let stage: Konva.Stage | null = null;
 let layer: Konva.Layer | null = null;
 let selectedComponentId: string | null = null;
+let selectedWireId: string | null = null;
 let mode: 'select' | 'wire' = 'select';
 let wireStart: string | null = null;
 let pointer: { x: number; y: number } | null = null;
 let saveModel: SaveSchematic | null = null;
+let stageCandidate: StageNative | null = null;
 let history: string[] = [];
 let redoHistory: string[] = [];
 let spaceDown = false;
@@ -56,6 +59,12 @@ function setStatus(message: string, bad = false) {
   const element = document.getElementById('schematic-status');
   if (element) { element.textContent = message; element.dataset.status = bad ? 'error' : 'normal'; }
 }
+function updateNativeNote(message?: string) {
+  const label = document.getElementById('schematic-sync-state');
+  const hash = document.getElementById('schematic-source-hash');
+  if (label) label.textContent = message || (documentModel?.nativeSync?.sourceSha256 ? `Edits remain staged until approved · native hash ${documentModel.nativeSync.sourceSha256.slice(0, 12)}` : 'No native revision is linked; editing is disabled until safe import succeeds.');
+  if (hash) hash.textContent = documentModel?.nativeSync?.sourceSha256 ? `Native source SHA-256: ${documentModel.nativeSync.sourceSha256}` : 'Native source SHA-256: unavailable';
+}
 function selected() { return documentModel?.components.find(component => component.id === selectedComponentId) || null; }
 function renderProperties() {
   const component = selected();
@@ -66,7 +75,7 @@ function renderProperties() {
   safeValue.addEventListener('change', () => {
     const next = safeValue.value.trim();
     if (!next || next === component.value || !documentModel) return;
-    pushHistory(); component.value = next; draw(); setStatus(`${component.reference} value updated. Save to keep this revision.`);
+    pushHistory(); component.value = next; draw(); setStatus(`${component.reference} value updated. Save a revision, then validate and explicitly approve the KiCad candidate.`);
   });
   panel.replaceChildren();
   const heading = document.createElement('div'); heading.className = 'eyebrow'; heading.textContent = 'SELECTED COMPONENT';
@@ -83,10 +92,10 @@ function addWire(fromNodeId: string, toNodeId: string) {
   if (!from || !to) { setStatus('That connection point is no longer available.', true); return; }
   pushHistory();
   documentModel.wires.push({ id: stableId('wire'), fromNodeId, toNodeId });
-  draw(); setStatus('Wire added. The electrical connection is stored by pin and junction IDs.');
+  draw(); setStatus('Wire added. KiCad remains unchanged until candidate validation and explicit commit.');
 }
 function handlePin(nodeId: string) {
-  if (mode !== 'wire' || !documentModel) { const match = /^pin:([^:]+):/.exec(nodeId); selectedComponentId = match?.[1] || null; renderProperties(); draw(); return; }
+  if (mode !== 'wire' || !documentModel) { const match = /^pin:([^:]+):/.exec(nodeId); selectedComponentId = match?.[1] || null; selectedWireId = null; renderProperties(); draw(); return; }
   if (!wireStart) { wireStart = nodeId; setStatus('Choose another pin, or click the grid to place a junction.'); draw(); return; }
   if (wireStart === nodeId) { setStatus('Choose a different pin or junction.'); return; }
   const from = wireStart; wireStart = null; addWire(from, nodeId);
@@ -110,8 +119,8 @@ function drawWires() {
     if (!a || !b) continue;
     const midX = snap((a.x + b.x) / 2);
     const points = [a.x, a.y, midX, a.y, midX, b.y, b.x, b.y];
-    const line = new Konva.Line({ points, stroke: style.wire, strokeWidth: 2.1, lineCap: 'square', lineJoin: 'miter', hitStrokeWidth: 12, name: 'wire', id: wire.id });
-    line.on('click tap', event => { if (mode === 'select') { event.cancelBubble = true; setStatus('Wires are selected by their endpoint pins in this preview.'); } });
+    const line = new Konva.Line({ points, stroke: selectedWireId === wire.id ? style.copper : style.wire, strokeWidth: selectedWireId === wire.id ? 3.2 : 2.1, lineCap: 'square', lineJoin: 'miter', hitStrokeWidth: 14, name: 'wire', id: wire.id });
+    line.on('click tap', event => { if (mode === 'select') { event.cancelBubble = true; selectedWireId = wire.id; selectedComponentId = null; renderProperties(); draw(); setStatus('Connection selected. Use Delete to disconnect these native pins.'); } });
     layer.add(line);
   }
   for (const junction of documentModel.junctions) {
@@ -154,7 +163,7 @@ function drawComponent(component: SchematicComponent) {
     dot.on('click tap', event => { event.cancelBubble = true; handlePin(pinNode); });
     group.add(dot);
   }
-  group.on('click tap', event => { event.cancelBubble = true; if (mode === 'select') { selectedComponentId = component.id; renderProperties(); draw(); } });
+  group.on('click tap', event => { event.cancelBubble = true; if (mode === 'select') { selectedComponentId = component.id; selectedWireId = null; renderProperties(); draw(); } });
   group.on('dragstart', () => { pushHistory(); });
   group.on('dragmove', () => setStatus(`Moving ${component.reference} · pins remain connected by their IDs.`));
   group.on('dragend', () => {
@@ -194,6 +203,12 @@ function addComponent(libId: string) {
   (document.getElementById('component-picker') as HTMLDialogElement | null)?.close();
 }
 function removeSelected() {
+  if (selectedWireId && documentModel) {
+    const selectedId = selectedWireId;
+    if (!documentModel.wires.some(item => item.id === selectedId)) { selectedWireId = null; return; }
+    pushHistory(); documentModel.wires = documentModel.wires.filter(item => item.id !== selectedId); selectedWireId = null;
+    renderProperties(); draw(); setStatus('Connection removed. KiCad/ERC will not reflect this until a staged candidate passes native validation and you approve commit.'); return;
+  }
   if (!documentModel || !selectedComponentId) return;
   const component = selected(); if (!component) return;
   const nodes = new Set(component.pins.map(pin => pinId(component.id, pin.number)));
@@ -201,7 +216,7 @@ function removeSelected() {
   documentModel.components = documentModel.components.filter(item => item.id !== component.id);
   documentModel.wires = documentModel.wires.filter(wire => !nodes.has(wire.fromNodeId) && !nodes.has(wire.toNodeId));
   documentModel.labels = documentModel.labels.filter(label => !nodes.has(label.nodeId));
-  selectedComponentId = null; renderProperties(); draw(); setStatus(`${component.reference} and its attached connections were removed.`);
+  selectedComponentId = null; selectedWireId = null; renderProperties(); draw(); setStatus(`${component.reference} and its attached connections were removed; KiCad remains unchanged.`);
 }
 function rotateSelected() {
   if (!documentModel) return;
@@ -213,6 +228,7 @@ function undo() {
   if (!documentModel || !history.length) return;
   redoHistory.push(JSON.stringify(documentModel)); documentModel = JSON.parse(history.pop()!) as SchematicDocument;
   selectedComponentId = selectedComponentId && documentModel.components.some(item => item.id === selectedComponentId) ? selectedComponentId : null;
+  selectedWireId = selectedWireId && documentModel.wires.some(item => item.id === selectedWireId) ? selectedWireId : null;
   renderProperties(); draw(); setStatus('Undid the last schematic edit.');
 }
 function redo() {
@@ -278,8 +294,19 @@ function installToolbar() {
     if (!documentModel || !saveModel) return;
     const issues = validateSchematic(documentModel);
     if (issues.length) { setStatus(issues.join(' '), true); return; }
-    try { const revision = await saveModel(cloneDocument(documentModel)); setStatus(`Saved local DemonX revision ${revision}. KiCad native files remain unchanged.`); }
+    try { const revision = await saveModel(cloneDocument(documentModel)); setStatus(`Saved local DemonX revision ${revision}. Native KiCad checks do not include these edits until a candidate is validated and committed.`); }
     catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
+  });
+  document.getElementById('schematic-stage-native')?.addEventListener('click', async () => {
+    if (!documentModel || !stageCandidate) return;
+    const issues = validateSchematic(documentModel);
+    if (issues.length) { setStatus(issues.join(' '), true); return; }
+    try {
+      const staged = await stageCandidate(cloneDocument(documentModel));
+      if (staged.status === 'PASS') window.dispatchEvent(new CustomEvent('circuit:native-stage-ready', { detail: staged }));
+      else window.dispatchEvent(new CustomEvent('circuit:native-stage-failed', { detail: staged }));
+      setStatus(staged.message, staged.status !== 'PASS');
+    } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
   });
   document.getElementById('schematic-undo')?.addEventListener('click', undo);
   document.getElementById('schematic-redo')?.addEventListener('click', redo);
@@ -318,16 +345,16 @@ function fit() {
   const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min(stage.width() / ((maxX - minX) * GRID), stage.height() / ((maxY - minY) * GRID))));
   stage.scale({ x: scale, y: scale }); stage.position({ x: (stage.width() - (maxX + minX) * GRID * scale) / 2, y: (stage.height() - (maxY + minY) * GRID * scale) / 2 }); draw();
 }
-export function mount(initialDocument: SchematicDocument, save: SaveSchematic) {
+export function mount(initialDocument: SchematicDocument, save: SaveSchematic, stageCandidateAction: StageNative) {
   const container = document.getElementById('schematic-stage');
   if (!container) throw new Error('Schematic workspace is missing its canvas.');
   const issues = validateSchematic(initialDocument);
   if (issues.length) throw new Error(`This schematic model cannot be opened safely: ${issues.join(' ')}`);
-  documentModel = cloneDocument(initialDocument); saveModel = save; history = []; redoHistory = []; selectedComponentId = null; wireStart = null;
+  documentModel = cloneDocument(initialDocument); saveModel = save; stageCandidate = stageCandidateAction; history = []; redoHistory = []; selectedComponentId = null; selectedWireId = null; wireStart = null;
   if (stage) stage.destroy();
   stage = new Konva.Stage({ container: container as HTMLDivElement, width: container.clientWidth, height: container.clientHeight });
   stage.scale({ x: 0.85, y: 0.85 });
   stage.position({ x: container.clientWidth / 2 - 50 * GRID * 0.85, y: container.clientHeight / 2 - 40 * GRID * 0.85 });
-  layer = new Konva.Layer(); stage.add(layer); installToolbar(); installInteractions(); renderProperties(); draw(); updateHistoryButtons();
-  setStatus('Select mode · use Add Component, Wire, or drag parts on the 50 mil grid.');
+  layer = new Konva.Layer(); stage.add(layer); installToolbar(); installInteractions(); renderProperties(); draw(); updateHistoryButtons(); updateNativeNote();
+  setStatus('Imported from the native KiCad schematic. Editor changes remain sidecar revisions until native validation and explicit approval.');
 }

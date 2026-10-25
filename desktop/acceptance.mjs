@@ -4,13 +4,17 @@
 // fresh temporary project root in the test process only; project creation and
 // manifest I/O still run through the packaged app's normal main-process code.
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 
 const executable = resolve(process.argv[2] || '');
 if (!process.argv[2]) throw new Error('Usage: node desktop/acceptance.mjs <portable-exe> <artifact-dir>');
+const require = createRequire(import.meta.url);
+const packageAdapter = require(join(dirname(executable), 'resources', 'app', 'desktop', 'kicad-schematic-adapter.cjs'));
 const artifactDir = resolve(process.argv[3] || 'reports/desktop-acceptance');
 await mkdir(artifactDir, { recursive: true });
 const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
@@ -145,6 +149,26 @@ async function dragCanvas(from, to) {
   }
   await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(100);
+}
+async function replaceTextInput(selector, text) {
+  await clickSelector(selector);
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Control', code: 'ControlLeft', modifiers: 2, windowsVirtualKeyCode: 17 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 });
+  await cdp('Input.insertText', { text });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await sleep(150);
+}
+async function componentCanvasPoint(reference) {
+  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+}
+async function pinCanvasPoint(reference, number) {
+  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),p=c?.pins.find(item=>item.number===${JSON.stringify(number)}),e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; let x=p.x,y=p.y; for(let i=0;i<c.rotation/90;i++) [x,y]=[-y,x]; return {x:r.left+e.clientWidth/2-50*20*s+(c.x+x)*20*s,y:r.top+e.clientHeight/2-40*20*s+(c.y+y)*20*s}; })()`);
+}
+async function wireCanvasPoint(index) {
+  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),w=m.wires[${index}],node=id=>{const q=/^pin:([^:]+):(.+)$/.exec(id),c=m.components.find(v=>v.id===q?.[1]),p=c?.pins.find(v=>v.number===q?.[2]);if(c&&p){let x=p.x,y=p.y;for(let i=0;i<c.rotation/90;i++)[x,y]=[-y,x];return{x:c.x+x,y:c.y+y};}const j=m.junctions.find(v=>v.id===id);return j?{x:j.x,y:j.y}:null;},a=node(w.fromNodeId),b=node(w.toNodeId),mid=Math.round((a.x+b.x)/2);let worldX,worldY;if(a.x!==mid){worldX=a.x+(mid-a.x)*.2;worldY=a.y;}else if(a.y!==b.y){worldX=mid;worldY=a.y+(b.y-a.y)*.2;}else{worldX=mid+(b.x-mid)*.2;worldY=b.y;}const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85;return{x:r.left+e.clientWidth/2-50*20*s+worldX*20*s,y:r.top+e.clientHeight/2-40*20*s+worldY*20*s};})()`);
 }
 async function saveEditorRevision(description) {
   const previous = await evaluate(`document.getElementById('schematic-status').textContent`);
@@ -351,7 +375,9 @@ try {
       await clickCanvasAt(wireTargets.to.x, wireTargets.to.y);
       await saveEditorRevision('save pin-to-pin wire revision');
       const wiredModel = await evaluate('window.circuit.loadSchematicModel()');
-      check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has('pin:component-input-01:1') && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${wiredModel.components.find(c => c.reference === 'J2')?.id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
+      const j1Id = wiredModel?.components?.find(c => c.reference === 'J1')?.id;
+      const j2Id = wiredModel?.components?.find(c => c.reference === 'J2')?.id;
+      check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j1Id}:1`) && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j2Id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
 
     await click('schematic-save');
@@ -368,6 +394,120 @@ try {
     await screenshot('schematic-editor-reopened.png');
     await click('schematic-back');
   } else fail('Open Project reopens the created project', 'Skipped because New Project did not create its expected project file.');
+
+  // Native round-trip acceptance uses a fresh, real LED/resistor project so
+  // the earlier editor interaction test remains isolated and unchanged.
+  const beforeRoundtripProjectId = await evaluate(`document.getElementById('project-id').textContent`);
+  await click('new-project');
+  const roundtripCreated = await waitUntil(`document.getElementById('project-id')?.textContent !== ${JSON.stringify(beforeRoundtripProjectId)}`, 'create a clean native round-trip project', 120000).catch(async error => ({ error: error.message, state: await evaluate(`document.getElementById('project-id')?.textContent`) }));
+  const roundtripRoot = join(projectRoot, 'DemonX-Circuit-Project-3');
+  const roundtripManifest = await readFile(join(roundtripRoot, 'project.json'), 'utf8').then(JSON.parse).catch(() => null);
+  const roundtripSchematic = join(roundtripRoot, 'DemonX-Circuit-Project-3.kicad_sch');
+  const nativeOriginal = await readFile(roundtripSchematic).catch(() => null);
+  const nativeOriginalHash = nativeOriginal && packageAdapter.digest(nativeOriginal);
+  const importedProject = await evaluate('window.circuit.inspectProject()');
+  check('new LED reference project imports native KiCad components and records the source revision', !!roundtripManifest && importedProject?.nativeSyncStatus === 'IN_SYNC' && importedProject.components.some(component => component.ref === 'R1'), JSON.stringify({ created: roundtripCreated, status: importedProject?.nativeSyncStatus, nativeSha256: importedProject?.nativeSchematicSha256, root: roundtripRoot }));
+  let roundtripEditorOpened = false;
+  if (roundtripManifest && nativeOriginal) {
+    await click('open-circuit-schematic');
+    roundtripEditorOpened = await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'open native-imported LED schematic in DemonX', 5000).then(() => true).catch(() => false);
+    const importedModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor imports native references, values, coordinates, orientations, pins, labels and wires', roundtripEditorOpened && importedModel?.components?.map(c => [c.reference, c.value, c.x, c.y, c.rotation]).some(c => c.join('|') === 'R1|330|50|40|0') && importedModel.components.length === 3 && importedModel.wires.length === 3 && packageAdapter.netGroups(importedModel).length === 3, JSON.stringify({ components: importedModel?.components?.map(c => [c.reference, c.value, c.x, c.y, c.rotation]), nets: importedModel && packageAdapter.netGroups(importedModel) }));
+    const unsupportedNative = Buffer.concat([nativeOriginal.subarray(0, nativeOriginal.length - 1), Buffer.from(' (no_connect (at 1 2) (uuid "00000000-0000-4000-8000-000000000000"))\n)')]);
+    let unsupportedRefused = false;
+    try { packageAdapter.importKiCadSchematic(unsupportedNative.toString('utf8')); } catch (error) { unsupportedRefused = /no_connect/.test(error.message); }
+    check('packaged adapter refuses unsupported native electrical constructs without changing source', unsupportedRefused && (await readFile(roundtripSchematic)).equals(nativeOriginal), `no_connect refused=${unsupportedRefused}; source SHA-256=${packageAdapter.digest(await readFile(roundtripSchematic))}`);
+
+    let r1Point = await componentCanvasPoint('R1');
+    await clickCanvasAt(r1Point.x, r1Point.y);
+    await replaceTextInput('#schematic-value', '470');
+    let editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor edits a native component value through mouse and keyboard input', editModel?.components?.find(c => c.reference === 'R1')?.value === '470', JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
+    r1Point = await componentCanvasPoint('R1');
+    await dragCanvas(r1Point, { x: r1Point.x + 34, y: r1Point.y + 34 });
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor moves imported native component and retains its stable reference', editModel?.components?.find(c => c.reference === 'R1')?.x === 52 && editModel?.components?.find(c => c.reference === 'R1')?.y === 42, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
+    r1Point = await componentCanvasPoint('R1'); await clickCanvasAt(r1Point.x, r1Point.y); await click('schematic-rotate');
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor rotates imported native component', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
+
+    await click('schematic-select');
+    const disconnectPoint = await wireCanvasPoint(0); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor disconnects an imported native pin connection', editModel?.wires?.length === 2, JSON.stringify(editModel?.wires));
+    await click('schematic-wire');
+    let point = await pinCanvasPoint('J1', '1'); await clickCanvasAt(point.x, point.y);
+    point = await pinCanvasPoint('R1', '2'); await clickCanvasAt(point.x, point.y);
+    point = await pinCanvasPoint('R1', '1'); await clickCanvasAt(point.x, point.y);
+    point = await pinCanvasPoint('D1', '1'); await clickCanvasAt(point.x, point.y);
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    const expectedRewiredNets = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
+    check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 4 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
+    await screenshot('schematic-native-edited.png');
+
+    await click('schematic-stage-native');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'native candidate netlist and ERC result', 120000);
+    const stageStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
+    const stageOutput = await evaluate(`document.getElementById('result-message').textContent + '\n' + document.getElementById('result-output').textContent`);
+    const stagedDir = join(roundtripRoot, 'schematic-circuit', 'staged');
+    const stagedRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
+    const validStage = stagedRecords.filter(record => record.validated).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
+    check('Validate & Stage exports native candidate, compares original/candidate netlists and passes actual ERC', stageStatus === 'PASS' && !!validStage && validStage.validation.originalNetlist?.matches && validStage.validation.candidateNetlist?.matches && validStage.validation.erc.exitCode === 0 && /ERC exit code: 0|Candidate ERC exit: 0/.test(stageOutput), stageOutput);
+    check('staging keeps native source unchanged and stores exact source/candidate hashes', !!validStage && packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash && validStage.sourceSha256 === nativeOriginalHash && validStage.candidateSha256 !== nativeOriginalHash, JSON.stringify({ source: nativeOriginalHash, current: packageAdapter.digest(await readFile(roundtripSchematic)), candidate: validStage?.candidateSha256 }));
+    await screenshot('schematic-native-staged.png');
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('schematic-back'); await click('check-circuit');
+    await waitUntil(`document.getElementById('result-dialog').open`, 'refuse stale native checks while DemonX changes are unsynchronized');
+    const staleCheck = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
+    check('native ERC is not presented as verification while the editor and KiCad differ', staleCheck.status === 'NOT TESTED' && /unsynchronized/i.test(staleCheck.message + staleCheck.output), JSON.stringify(staleCheck));
+    await clickSelector('#result-dialog .modal-actions button');
+    await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen editor for native candidate review');
+    await click('schematic-open-stage'); await waitUntil(`document.getElementById('result-dialog').open`, 'open staged candidate in KiCad graphical editor', 30000);
+    const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
+    let editorWindow = null;
+    try { editorWindow = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-Process -Name eeschema -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1 Id,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress"], { encoding: 'utf8', timeout: 15000 }).trim(); } catch {}
+    check('staged candidate opens in KiCad graphical editor with a visible window', guiOpen.status === 'PASS' && /KiCad .*staged candidate/i.test(guiOpen.message) && !!editorWindow, JSON.stringify({ ...guiOpen, window: editorWindow }));
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('schematic-commit-native');
+    const approval = await evaluate(`({open:document.getElementById('native-commit-dialog').open,details:document.getElementById('native-commit-details').textContent})`);
+    check('native commit requires explicit approval with source and candidate hashes', approval.open && approval.details.includes(validStage.sourceSha256) && approval.details.includes(validStage.candidateSha256), JSON.stringify(approval));
+    await click('native-commit-approve'); await waitUntil(`document.getElementById('result-dialog').open`, 'approved native schematic commit', 30000);
+    const commitResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
+    const committedNative = await readFile(roundtripSchematic);
+    const backups = await readdir(join(roundtripRoot, 'schematic-circuit', 'native-backups')).catch(() => []);
+    const originalBackup = backups[0] ? await readFile(join(roundtripRoot, 'schematic-circuit', 'native-backups', backups[0])) : null;
+    check('approved commit replaces native schematic only after validation and retains exact rollback backup', commitResult.status === 'PASS' && packageAdapter.digest(committedNative) === validStage.candidateSha256 && originalBackup?.equals(nativeOriginal), JSON.stringify({ ...commitResult, candidateHash: validStage.candidateSha256, backupName: backups[0], backupMatchesOriginal: originalBackup?.equals(nativeOriginal) }));
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reimport committed native schematic into DemonX');
+    const reimportedCommitted = await evaluate(`(async()=>({model:await window.circuit.loadSchematicModel(),project:await window.circuit.inspectProject()}))()`);
+    check('committed KiCad schematic reimports to the same edited semantic model', reimportedCommitted.project?.nativeSyncStatus === 'IN_SYNC' && reimportedCommitted.model?.nativeSync?.sourceSha256 === validStage.candidateSha256 && reimportedCommitted.model?.components?.find(c=>c.reference==='R1')?.value === '470' && reimportedCommitted.model?.components?.find(c=>c.reference==='R1')?.rotation === 90 && JSON.stringify(packageAdapter.netGroups(reimportedCommitted.model)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ status: reimportedCommitted.project?.nativeSyncStatus, nativeSha256: reimportedCommitted.model?.nativeSync?.sourceSha256, nets: reimportedCommitted.model && packageAdapter.netGroups(reimportedCommitted.model) }));
+    await screenshot('schematic-native-reimported.png');
+
+    await click('schematic-rollback-native');
+    const rollbackDialog = await evaluate(`document.getElementById('native-commit-dialog').open`);
+    check('rollback action requests separate explicit approval', rollbackDialog === true, `dialog open=${rollbackDialog}`);
+    await click('native-commit-approve'); await waitUntil(`document.getElementById('result-dialog').open`, 'approved native schematic rollback', 30000);
+    const rollbackResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
+    check('rollback restores the exact original KiCad schematic', rollbackResult.status === 'PASS' && packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash, JSON.stringify({ ...rollbackResult, restoredSha256: packageAdapter.digest(await readFile(roundtripSchematic)), expectedSha256: nativeOriginalHash }));
+    await clickSelector('#result-dialog .modal-actions button');
+
+    await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen restored native LED schematic');
+    const invalidDisconnect = await wireCanvasPoint(0); await click('schematic-select'); await clickCanvasAt(invalidDisconnect.x, invalidDisconnect.y); await click('schematic-delete');
+    const invalidModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('invalid electrical connectivity fixture disconnects a native pin', invalidModel?.wires?.length === 2, JSON.stringify(invalidModel?.wires));
+    await click('schematic-stage-native'); await waitUntil(`document.getElementById('result-dialog').open`, 'native ERC rejects deliberately disconnected candidate', 120000);
+    const invalidResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
+    const allStageRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
+    const rejectedStage = allStageRecords.filter(record => !record.validated).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
+    check('native ERC rejects disconnected pin candidate and preserves source', invalidResult.status === 'FAIL' && !!rejectedStage && rejectedStage.validation.erc.exitCode !== 0 && packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash, JSON.stringify({ status: invalidResult.status, ercExitCode: rejectedStage?.validation?.erc?.exitCode, sourcePreserved: packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash, output: invalidResult.output }));
+    await screenshot('schematic-native-invalid-rejected.png');
+    await clickSelector('#result-dialog .modal-actions button'); await click('schematic-back');
+  } else {
+    for (const name of ['native schematic import', 'native candidate editing', 'native netlist/ERC round-trip', 'native GUI reopen', 'native commit/rollback']) notTested(name, 'Native round-trip project did not create with KiCad on this packaged runner.');
+  }
 
   const fixtureId = 'dx-esp32-bme280-relay-demo';
   let fixtureOpened = false;

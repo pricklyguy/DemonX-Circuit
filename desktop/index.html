@@ -44,7 +44,7 @@
             <div class="meta-grid"><div><span>PROJECT ID</span><strong id="project-id">—</strong></div><div><span>REVISION</span><strong id="project-revision">—</strong></div><div class="wide"><span>NATIVE DESIGN</span><strong id="native-status">—</strong></div></div>
             <div class="section-label">DESIGN ACTIONS</div>
             <div class="action-grid">
-              <button id="open-circuit-schematic" class="workflow-action" disabled><span class="action-icon">⌁</span><span><strong>Edit Schematic in Circuit</strong><small>Native files stay unchanged; save local DemonX revisions</small></span><b>→</b></button>
+              <button id="open-circuit-schematic" class="workflow-action" disabled><span class="action-icon">⌁</span><span><strong>Edit Schematic in Circuit</strong><small>Import supported KiCad designs; validate and approve native updates</small></span><b>→</b></button>
               <button id="open-schematic" class="workflow-action"><span class="action-icon">⌗</span><span><strong>Open Schematic in KiCad</strong><small>Use KiCad’s native editor</small></span><b>↗</b></button>
               <button id="open-pcb" class="workflow-action"><span class="action-icon">▦</span><span><strong>Open PCB in KiCad</strong><small>Placement and routing</small></span><b>↗</b></button>
               <button id="check-circuit" class="workflow-action"><span class="action-icon">✓</span><span><strong>Check Circuit</strong><small>Run native ERC and DRC</small></span><b>→</b></button>
@@ -93,6 +93,10 @@
             <button id="schematic-undo" class="button secondary" disabled>Undo</button>
             <button id="schematic-redo" class="button secondary" disabled>Redo</button>
             <button id="schematic-save" class="button primary">Save Revision</button>
+            <button id="schematic-stage-native" class="button primary">Validate &amp; Stage</button>
+            <button id="schematic-open-stage" class="button secondary" disabled>Open Candidate in KiCad</button>
+            <button id="schematic-commit-native" class="button danger" disabled>Review &amp; Commit</button>
+            <button id="schematic-rollback-native" class="button secondary" disabled>Rollback Commit</button>
           </div>
         </div>
         <div class="schematic-body">
@@ -104,7 +108,7 @@
             <div id="schematic-stage" class="schematic-stage" aria-label="Interactive schematic canvas"></div>
             <div id="schematic-status" class="schematic-status" role="status">Loading schematic…</div>
           </div>
-          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Component details</h2><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component to see its details.</div></div><div class="schematic-engine-note"><strong>Native KiCad export is not connected to this editor yet.</strong><p>Edits save as immutable DemonX schematic revisions. The original KiCad files are not modified. Run checks and open the native design in KiCad using the project actions.</p></div></aside>
+          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Component details</h2><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component to see its details.</div></div><div class="schematic-engine-note"><strong id="schematic-sync-state">Edits are staged before KiCad changes.</strong><p>Save creates a recoverable DemonX revision. Validate &amp; Stage exports a separate native candidate, compares original and candidate netlists, and runs KiCad ERC. The original stays unchanged until you review and explicitly approve commit. Edits outside the supported symbol/wire/label subset are refused.</p><p id="schematic-source-hash" class="muted">Native revision hash: checking…</p></div></aside>
         </div>
       </section>
       <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
@@ -115,6 +119,7 @@
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>
   <dialog id="component-picker" class="modal component-picker"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Add a component</h2></div><button class="close-button" aria-label="Close">×</button></div><input id="component-search" class="component-search" type="search" placeholder="Search resistors, LEDs, connectors…" autocomplete="off"><div id="component-choices" class="component-choices"></div><div class="modal-actions"><button class="button secondary">Cancel</button></div></form></dialog>
+  <dialog id="native-commit-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">NATIVE SCHEMATIC APPROVAL</div><h2>Commit validated candidate?</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="native-commit-message">Review the exact source and candidate hashes. A non-overwriting backup will be created before the KiCad file is replaced.</p><pre id="native-commit-details" class="output"></pre><div class="modal-actions"><button id="native-commit-cancel" class="button secondary" type="button">Keep original</button><button id="native-commit-approve" class="button danger" type="button">Approve &amp; Commit</button></div></form></dialog>
   <script src="./dist/renderer.js"></script>
 </body>
 </html>

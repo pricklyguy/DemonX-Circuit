@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { deriveNets, pinId } = require(resolve(dirname(fileURLToPath(import.meta.url)), '../desktop/dist/schematic-model.js'));
+const schematicAdapter = require(resolve(dirname(fileURLToPath(import.meta.url)), '../desktop/kicad-schematic-adapter.cjs'));
 const MAX_TEXT = 50_000;
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const server = new McpServer({ name: 'demonx-circuit', version: '0.6.0' });
@@ -34,7 +35,9 @@ async function safeProjectFile(rel) {
   return actual;
 }
 async function currentSchematicModel() {
-  const directory = resolve(authorizedRoot, 'schematic-circuit', 'revisions');
+  let directory;
+  try { directory = await safeProjectFile('schematic-circuit/revisions'); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   let entries;
   try { entries = await readdir(directory, { withFileTypes: true }); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   const files = entries.filter(entry => entry.isFile() && /^\d{6}-.+\.json$/i.test(entry.name)).map(entry => entry.name).sort();
@@ -45,6 +48,25 @@ async function currentSchematicModel() {
   const value = JSON.parse(text);
   if (value.format !== 'demonx-schematic' || value.formatVersion !== 1) throw new Error('Latest DemonX schematic model uses an unsupported format.');
   return value;
+}
+async function nativeRevisionSummary(model = null) {
+  const schematicRel = (Array.isArray(manifest.native?.files) ? manifest.native.files : []).find(item => typeof item === 'string' && item.toLowerCase().endsWith('.kicad_sch'));
+  if (!schematicRel) return { status: 'NOT_TESTED', sourceSha256: null, editorRevision: null, reason: 'No native schematic is listed in the project manifest.' };
+  let file;
+  try { file = await safeProjectFile(schematicRel); }
+  catch (error) { if (error.code === 'ENOENT') return { status: 'NOT_TESTED', sourceSha256: null, editorRevision: null, reason: 'The native schematic is missing.' }; throw error; }
+  const source = await readFile(file, 'utf8'); const sourceSha256 = schematicAdapter.digest(source);
+  let revisions = [];
+  try { revisions = await readdir(await safeProjectFile('schematic-circuit/revisions'), { withFileTypes: true }); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const editorRevision = revisions.filter(entry => entry.isFile() && /^\d{6}-.+\.json$/i.test(entry.name)).map(entry => entry.name).sort().at(-1) || null;
+  if (!model || !editorRevision) return { status: 'NOT_IMPORTED', sourceSha256, editorRevision, reason: 'No DemonX schematic revision is available.' };
+  if (model.nativeSync?.sourceSha256 !== sourceSha256) return { status: 'EXTERNAL_CONFLICT', sourceSha256, editorRevision, reason: 'Native KiCad content changed since the editor model was imported.' };
+  try {
+    const nativeModel = schematicAdapter.importKiCadSchematic(source);
+    const same = schematicAdapter.sameSemantic(model, nativeModel);
+    return { status: same ? 'IN_SYNC' : 'UNSYNCHRONIZED', sourceSha256, editorRevision, reason: same ? 'Semantic model matches this exact native schematic SHA-256.' : 'Saved DemonX edits are not reflected in the native KiCad schematic.' };
+  } catch (error) { return { status: 'UNSUPPORTED', sourceSha256, editorRevision, reason: error.message || String(error) }; }
 }
 async function listProjectFiles(directory, extensions, limit = 200) {
   let result = [];
@@ -72,7 +94,9 @@ server.registerTool('project_info', { title: 'Project information', description:
     try { await safeProjectFile(item); nativeFiles.push({ path: item, present: true }); }
     catch (error) { if (error.code === 'ENOENT') nativeFiles.push({ path: item, present: false }); else throw error; }
   }
-  return ok({ name: manifest.name || basename(authorizedRoot), projectId: manifest.projectId || null, revision: manifest.revision || null, formatVersion: manifest.formatVersion || null, native: { engine: manifest.native?.engine || null, engineVersion: manifest.native?.engineVersion || null, files: nativeFiles }, authorization: 'One local project directory explicitly granted at server startup; no paths or commands are accepted from tool calls.' });
+  const model = await currentSchematicModel();
+  const schematicRevision = await nativeRevisionSummary(model);
+  return ok({ name: manifest.name || basename(authorizedRoot), projectId: manifest.projectId || null, revision: manifest.revision || null, formatVersion: manifest.formatVersion || null, native: { engine: manifest.native?.engine || null, engineVersion: manifest.native?.engineVersion || null, files: nativeFiles, schematicRevision }, authorization: 'One local project directory explicitly granted at server startup; no paths or commands are accepted from tool calls.' });
 });
 
 server.registerTool('list_components', { title: 'List schematic components', description: 'List component references, library IDs, values, and stable IDs from the saved DemonX schematic model. No component definitions or project files are modified.', annotations: READ_ONLY }, async () => {
@@ -119,10 +143,23 @@ server.registerTool('search_project_library', { title: 'Search project library',
 
 server.registerTool('list_verification_reports', { title: 'List ERC and DRC reports', description: 'Read existing KiCad ERC/DRC report files under the authorized project reports folder. Does not run KiCad and does not infer verification from a missing report.', inputSchema: z.object({ kind: z.enum(['ERC', 'DRC', 'all']).default('all').describe('Which existing report type to read.') }), annotations: READ_ONLY }, async ({ kind }) => {
   const reports = [];
+  const current = await nativeRevisionSummary(await currentSchematicModel());
+  const currentPcbRel = (Array.isArray(manifest.native?.files) ? manifest.native.files : []).find(item => typeof item === 'string' && item.toLowerCase().endsWith('.kicad_pcb'));
+  let currentPcbSha256 = null;
+  if (currentPcbRel) { try { currentPcbSha256 = schematicAdapter.digest(await readFile(await safeProjectFile(currentPcbRel))); } catch {} }
   for (const rel of await listProjectFiles('reports', ['.rpt'], 100)) {
     if (kind !== 'all' && !rel.toLowerCase().includes(kind.toLowerCase())) continue;
     const file = await safeProjectFile(rel), text = await readFile(file, 'utf8');
-    reports.push({ path: rel, bytes: Buffer.byteLength(text, 'utf8'), excerpt: text.slice(0, MAX_TEXT), truncated: text.length > MAX_TEXT });
+    const parent = rel.slice(0, rel.lastIndexOf('/'));
+    let designRevision = null;
+    try { designRevision = JSON.parse(await readFile(await safeProjectFile(`${parent}/design-revision.json`), 'utf8')); } catch {}
+    const schematicHash = designRevision?.files?.schematic?.sha256;
+    const pcbHash = designRevision?.files?.pcb?.sha256;
+    const hasRevision = !!designRevision;
+    const stale = hasRevision && ((schematicHash && current.sourceSha256 && schematicHash !== current.sourceSha256) || (pcbHash && currentPcbSha256 && pcbHash !== currentPcbSha256));
+    reports.push({ path: rel, bytes: Buffer.byteLength(text, 'utf8'), excerpt: text.slice(0, MAX_TEXT), truncated: text.length > MAX_TEXT,
+      revisionStatus: !hasRevision ? 'UNKNOWN' : stale ? 'STALE' : current.status === 'UNSYNCHRONIZED' || current.status === 'EXTERNAL_CONFLICT' ? 'STALE' : 'CURRENT',
+      validatedSchematicSha256: schematicHash || null, currentSchematicSha256: current.sourceSha256 || null, validatedPcbSha256: pcbHash || null, currentPcbSha256 });
   }
   return ok({ kind, status: reports.length ? 'existing-reports-found' : 'no-report-found', reports });
 });
