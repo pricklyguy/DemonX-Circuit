@@ -202,8 +202,7 @@ async function launch({ noNativeTools = false } = {}) {
   const target = await getTarget();
   await connect(target.webSocketDebuggerUrl);
   await cdp('Runtime.enable'); await cdp('Page.enable'); await cdp('Log.enable'); await cdp('Network.enable');
-  await cdp('Page.reload', { ignoreCache: true });
-  await waitUntil(`document.readyState === 'complete'`, 'packaged page load');
+  await waitUntil(`location.pathname.endsWith('/desktop/index.html') && document.readyState === 'complete'`, 'packaged page load');
   const expectedTheme = await evaluate('window.circuit.getTheme()');
   await waitUntil(`document.body.dataset.theme === ${JSON.stringify(expectedTheme)}`, 'preference loaded in packaged renderer');
 }
