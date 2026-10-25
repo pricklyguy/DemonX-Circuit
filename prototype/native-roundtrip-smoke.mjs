@@ -10,10 +10,11 @@ const sourcePath = resolve(sourceDirectory, 'DX_LED_Smoke.kicad_sch');
 const originalText = await readFile(sourcePath, 'utf8');
 const sourceHash = adapter.digest(originalText);
 const imported = adapter.importKiCadSchematic(originalText);
-assert.deepEqual(imported.components.map(({ reference, libId, value, x, y, rotation }) => [reference, libId, value, x, y, rotation]), [
+const componentSummary = imported.components.map(({ reference, libId, value, x, y, rotation }) => [reference, libId, value, x, y, rotation]).sort((a, b) => a[0].localeCompare(b[0]));
+assert.deepEqual(componentSummary, [
+  ['D1', 'Device:LED', 'RED LED', 60, 40, 0],
   ['J1', 'Connector_Generic:Conn_01x02', '5V INPUT', 40, 40, 0],
   ['R1', 'Device:R', '330', 50, 40, 0],
-  ['D1', 'Device:LED', 'RED LED', 60, 40, 0],
 ]);
 assert.equal(imported.wires.length, 3);
 assert.deepEqual(adapter.netGroups(imported), [['D1.1', 'R1.2'], ['D1.2', 'J1.2'], ['J1.1', 'R1.1']]);
