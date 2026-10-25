@@ -14,6 +14,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "prototype/**"
+      - "examples/native-smoke/led-resistor.dxcircuit.json"
       - "examples/esp32-sensor/**"
   workflow_dispatch:
 
