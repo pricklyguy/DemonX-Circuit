@@ -448,11 +448,15 @@ try {
     check('packaged editor rotates imported native component', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
 
     await click('schematic-select');
-    const disconnectPoint = await wireBetweenCanvasPoint('R1', '2', 'D1', '1'); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
-    await saveEditorRevision('save imported pin disconnection');
-    editModel = await evaluate('window.circuit.loadSchematicModel()');
     const semanticWireExists = (refA, pinA, refB, pinB) => { const idA = `pin:${editModel?.components?.find(c => c.reference === refA)?.id}:${pinA}`, idB = `pin:${editModel?.components?.find(c => c.reference === refB)?.id}:${pinB}`; return editModel?.wires?.some(w => (w.fromNodeId === idA && w.toNodeId === idB) || (w.fromNodeId === idB && w.toNodeId === idA)); };
-    check('packaged editor disconnects the selected imported native pin connection', editModel?.wires?.length === 2 && !semanticWireExists('R1', '2', 'D1', '1') && semanticWireExists('J1', '1', 'R1', '1') && semanticWireExists('D1', '2', 'J1', '2'), JSON.stringify({ wires: editModel?.wires, deletedWireAbsent: !semanticWireExists('R1', '2', 'D1', '1') }));
+    let disconnectPoint = await wireBetweenCanvasPoint('J1', '1', 'R1', '1'); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
+    await saveEditorRevision('save first imported pin disconnection');
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor disconnects the selected imported native pin connection', editModel?.wires?.length === 2 && !semanticWireExists('J1', '1', 'R1', '1') && semanticWireExists('R1', '2', 'D1', '1') && semanticWireExists('D1', '2', 'J1', '2'), JSON.stringify({ wires: editModel?.wires, deletedWireAbsent: !semanticWireExists('J1', '1', 'R1', '1') }));
+    disconnectPoint = await wireBetweenCanvasPoint('R1', '2', 'D1', '1'); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
+    await saveEditorRevision('save second imported pin disconnection');
+    editModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('packaged editor disconnects the second imported pin connection', editModel?.wires?.length === 1 && !semanticWireExists('R1', '2', 'D1', '1') && semanticWireExists('D1', '2', 'J1', '2'), JSON.stringify({ wires: editModel?.wires, deletedWireAbsent: !semanticWireExists('R1', '2', 'D1', '1') }));
     await click('schematic-wire');
     let point = await pinCanvasPoint('J1', '1'); await clickCanvasAt(point.x, point.y);
     point = await pinCanvasPoint('R1', '2'); await clickCanvasAt(point.x, point.y);
@@ -461,7 +465,7 @@ try {
     await saveEditorRevision('save imported pin reconnection');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     const expectedRewiredNets = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
-    check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 4 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
+    check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 3 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
     await screenshot('schematic-native-edited.png');
 
     await click('schematic-stage-native');

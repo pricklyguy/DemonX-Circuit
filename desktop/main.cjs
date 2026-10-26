@@ -406,7 +406,18 @@ async function stageNativeSchematic() {
   const reportDir = safeInside(project.root, `reports/schematic-roundtrip/${stageId}`);
   await fs.mkdir(stageDir, { recursive: true });
   await fs.mkdir(reportDir, { recursive: true });
-  const candidateRelative = `schematic-circuit/staged/${stageId}.kicad_sch`;
+  // KiCad CLI resolves project library tables relative to the candidate file's
+  // directory. Give the isolated candidate a matching project file and the
+  // project's tables/libraries so ERC sees the same native project context.
+  const sourceProjectName = path.basename(project.files.schematic, '.kicad_sch');
+  await fs.copyFile(path.join(project.root, `${sourceProjectName}.kicad_pro`), path.join(reportDir, 'candidate.kicad_pro'));
+  for (const table of ['sym-lib-table', 'fp-lib-table']) {
+    try { await fs.copyFile(path.join(project.root, table), path.join(reportDir, table)); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  try { await fs.cp(path.join(project.root, 'libraries'), path.join(reportDir, 'libraries'), { recursive: true, errorOnExist: true, force: false }); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const candidateRelative = `reports/schematic-roundtrip/${stageId}/candidate.kicad_sch`;
   const candidatePath = safeInside(project.root, candidateRelative);
   const reportFiles = ['original.net', 'candidate.net', 'candidate-erc.rpt', 'validation.json'].map(name => safeInside(project.root, `reports/schematic-roundtrip/${stageId}/${name}`));
   await fs.writeFile(candidatePath, generated.text, { flag: 'wx' });
