@@ -501,39 +501,18 @@ try {
     try {
       const probeScript = String.raw`Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public static class DemonXCircuitWindowMessages {
-  private delegate bool EnumChildCallback(IntPtr hWnd, IntPtr lParam);
-  [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildCallback callback, IntPtr lParam);
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
-  [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
-  public static bool ClickChildByCaption(IntPtr parent, string caption) {
-    IntPtr target = IntPtr.Zero;
-    EnumChildCallback callback = delegate(IntPtr child, IntPtr ignored) {
-      StringBuilder text = new StringBuilder(256);
-      GetWindowText(child, text, text.Capacity);
-      if (String.Equals(text.ToString(), caption, StringComparison.Ordinal)) { target = child; return false; }
-      return true;
-    };
-    EnumChildWindows(parent, callback, IntPtr.Zero);
-    if (target == IntPtr.Zero) return false;
-    IntPtr result;
-    return SendMessageTimeout(target, 0x00F5, IntPtr.Zero, IntPtr.Zero, 0x0002, 5000, out result) != IntPtr.Zero;
-  }
-}
-'@
+Add-Type -AssemblyName System.Windows.Forms
 $deadline = (Get-Date).AddSeconds(20)
 $fallbackDialogDismissed = $false
 $fallbackDialogAction = 'not encountered'
+$fallbackDialogAttempted = $false
 $windows = @()
 do {
   $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle)
   if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }
   $info = $windows | Where-Object { $_.MainWindowTitle -eq 'Information' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-  if ($info) {
+  if ($info -and -not $fallbackDialogAttempted) {
+    $fallbackDialogAttempted = $true
     try {
       $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$info.MainWindowHandle)
       $children = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
@@ -543,16 +522,14 @@ do {
         $fallbackDialogAction = 'known software-rendering dialog detected'
         $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
         if ($ok) {
-          try {
-            if ([DemonXCircuitWindowMessages]::ClickChildByCaption([IntPtr]$info.MainWindowHandle, 'OK')) {
-              $fallbackDialogDismissed = $true
-              $fallbackDialogAction = 'clicked the exact-caption native OK button'
-              Start-Sleep -Milliseconds 500
-            } else { $fallbackDialogAction = 'known dialog detected but native OK button was not found or did not respond' }
-          } catch { $fallbackDialogAction = ('OK invocation failed: ' + $_.Exception.Message) }
+          $root.SetFocus()
+          [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+          $fallbackDialogDismissed = $true
+          $fallbackDialogAction = 'sent Enter to the focused, exact-text KiCad fallback dialog'
+          Start-Sleep -Milliseconds 500
         } else { $fallbackDialogAction = 'known dialog detected but accessible OK control was absent' }
-      }
-    } catch {}
+      } else { $fallbackDialogAction = 'Information window did not match the known OpenGL fallback dialog' }
+    } catch { $fallbackDialogAction = ('dialog acknowledgement failed: ' + $_.Exception.Message) }
   }
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $deadline)
