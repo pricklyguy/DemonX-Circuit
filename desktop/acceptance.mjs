@@ -5,7 +5,7 @@
 // manifest I/O still run through the packaged app's normal main-process code.
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -585,6 +585,84 @@ ConvertTo-Json -InputObject @($details) -Depth 5 -Compress`;
     const backups = await readdir(join(roundtripRoot, 'schematic-circuit', 'native-backups')).catch(() => []);
     const originalBackup = backups[0] ? await readFile(join(roundtripRoot, 'schematic-circuit', 'native-backups', backups[0])) : null;
     check('approved commit replaces native schematic only after validation and retains exact rollback backup', commitResult.status === 'PASS' && packageAdapter.digest(committedNative) === validStage.candidateSha256 && originalBackup?.equals(nativeOriginal), JSON.stringify({ ...commitResult, candidateHash: validStage.candidateSha256, backupName: backups[0], backupMatchesOriginal: originalBackup?.equals(nativeOriginal) }));
+    const ownerFixtureRoot = join(artifactDir, 'native-roundtrip', 'owner-fixture');
+    if (commitResult.status === 'PASS' && packageAdapter.digest(committedNative) === validStage.candidateSha256 && originalBackup?.equals(nativeOriginal)) {
+      const originalDir = join(ownerFixtureRoot, 'original');
+      const candidateDir = join(ownerFixtureRoot, 'candidate');
+      const reportDir = join(ownerFixtureRoot, 'native-verification');
+      await Promise.all([mkdir(originalDir, { recursive: true }), mkdir(candidateDir, { recursive: true }), mkdir(reportDir, { recursive: true })]);
+      const projectBase = basename(roundtripSchematic, '.kicad_sch');
+      const nativeProjectFiles = [`${projectBase}.kicad_pro`, `${projectBase}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'];
+      for (const dir of [originalDir, candidateDir]) {
+        for (const name of nativeProjectFiles) {
+          const source = join(roundtripRoot, name);
+          if (existsSync(source)) await copyFile(source, join(dir, name));
+        }
+      }
+      await writeFile(join(originalDir, `${projectBase}.kicad_sch`), nativeOriginal);
+      await writeFile(join(candidateDir, `${projectBase}.kicad_sch`), committedNative);
+      await writeFile(join(candidateDir, 'backups', `${projectBase}.kicad_sch.initial-candidate`), nativeOriginal).catch(async error => {
+        if (error.code !== 'ENOENT') throw error;
+        await mkdir(join(candidateDir, 'backups'), { recursive: true });
+        await writeFile(join(candidateDir, 'backups', `${projectBase}.kicad_sch.initial-candidate`), nativeOriginal);
+      });
+      const originalManifest = roundtripManifest;
+      const candidateManifest = await readFile(join(roundtripRoot, 'project.json'), 'utf8').then(JSON.parse);
+      const makeManifest = (kind, sourceManifest) => {
+        const manifest = structuredClone(sourceManifest);
+        manifest.projectId = `dx-cp5-owner-${kind}-${manifest.projectId || 'fixture'}`;
+        manifest.name = `Checkpoint 5 Owner GUI ${kind}`;
+        manifest.revision = 'cp5-owner-gui-acceptance';
+        manifest.native.files = [`${projectBase}.kicad_pro`, `${projectBase}.kicad_sch`, `${projectBase}.kicad_pcb`];
+        manifest.native.engine = 'kicad';
+        manifest.native.engineVersion = '10.0.7';
+        manifest.native.status = kind === 'candidate'
+          ? `Exact KiCad 10.0.7 staged-and-committed candidate from packaged round-trip test; SHA-256 ${validStage.candidateSha256}; owner GUI review pending.`
+          : `Original KiCad 10.0.7 source snapshot for owner GUI comparison; SHA-256 ${nativeOriginalHash}.`;
+        manifest.libraries = [];
+        manifest.hardware = { components: [
+          { ref: 'D1', value: 'RED LED', kind: 'LED' },
+          { ref: 'J1', value: '5V INPUT', kind: 'connector' },
+          { ref: 'R1', value: '470', kind: 'resistor', x: 52, y: 42, rotation: 90 }
+        ] };
+        if (kind === 'original') manifest.hardware.components[2] = { ref: 'R1', value: '330', kind: 'resistor', x: 50, y: 40, rotation: 0 };
+        return manifest;
+      };
+      await writeFile(join(originalDir, 'project.json'), `${JSON.stringify(makeManifest('original', originalManifest), null, 2)}\n`);
+      await writeFile(join(candidateDir, 'project.json'), `${JSON.stringify(makeManifest('candidate', candidateManifest), null, 2)}\n`);
+      const stageEvidenceDir = join(roundtripRoot, validStage.candidate);
+      for (const name of ['original.net', 'candidate.net', 'candidate-erc.rpt', 'validation.json']) {
+        await copyFile(join(dirname(stageEvidenceDir), name), join(reportDir, name)).catch(error => {
+          if (error.code === 'ENOENT') throw new Error(`Native round-trip evidence is missing ${name} for owner GUI handoff.`);
+          throw error;
+        });
+      }
+      await writeFile(join(ownerFixtureRoot, 'evidence.json'), `${JSON.stringify({
+        status: 'PREPARED; owner graphical acceptance NOT TESTED',
+        sourceCommit: process.env.GITHUB_SHA || null,
+        kicadVersion: validStage.validation?.tool || 'KiCad CLI 10.0.7',
+        sourceSha256: nativeOriginalHash,
+        candidateSha256: validStage.candidateSha256,
+        sourceRevision: roundtripManifest?.revision || null,
+        stageId: validStage.stageId,
+        validation: { originalNetlist: validStage.validation?.originalNetlist, candidateNetlist: validStage.validation?.candidateNetlist, erc: { exitCode: validStage.validation?.erc?.exitCode } },
+        expectedComponents: [
+          { reference: 'D1', originalValue: 'RED LED', candidateValue: 'RED LED' },
+          { reference: 'J1', originalValue: '5V INPUT', candidateValue: '5V INPUT' },
+          { reference: 'R1', originalValue: '330', candidateValue: '470', originalPositionMm: [50, 40], candidatePositionMm: [52, 42], originalRotation: 0, candidateRotation: 90 }
+        ],
+        originalConnectivity: [['D1.1', 'R1.2'], ['D1.2', 'J1.2'], ['J1.1', 'R1.1']],
+        candidateConnectivity: expectedRewiredNets,
+        backupSha256: packageAdapter.digest(originalBackup)
+      }, null, 2)}\n`);
+      check('exact native round-trip candidate and source projects are included in the acceptance artifact',
+        packageAdapter.digest(await readFile(join(candidateDir, `${projectBase}.kicad_sch`))) === validStage.candidateSha256 &&
+        packageAdapter.digest(await readFile(join(candidateDir, `backups/${projectBase}.kicad_sch.initial-candidate`))) === nativeOriginalHash &&
+        existsSync(join(reportDir, 'validation.json')),
+        JSON.stringify({ candidateSha256: packageAdapter.digest(await readFile(join(candidateDir, `${projectBase}.kicad_sch`))), expectedCandidateSha256: validStage.candidateSha256, evidenceDir: reportDir }));
+    } else {
+      notTested('exact owner GUI fixture capture', 'Native candidate did not complete the approved commit and verified backup checks.');
+    }
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reimport committed native schematic into DemonX');
