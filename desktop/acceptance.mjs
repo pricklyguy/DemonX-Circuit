@@ -501,7 +501,30 @@ try {
     try {
       const probeScript = String.raw`Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
-Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class DemonXCircuitWindowMessages {
+  private delegate bool EnumChildCallback(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildCallback callback, IntPtr lParam);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+  [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+  public static bool ClickChildByCaption(IntPtr parent, string caption) {
+    IntPtr target = IntPtr.Zero;
+    EnumChildCallback callback = delegate(IntPtr child, IntPtr ignored) {
+      StringBuilder text = new StringBuilder(256);
+      GetWindowText(child, text, text.Capacity);
+      if (String.Equals(text.ToString(), caption, StringComparison.Ordinal)) { target = child; return false; }
+      return true;
+    };
+    EnumChildWindows(parent, callback, IntPtr.Zero);
+    if (target == IntPtr.Zero) return false;
+    IntPtr result;
+    return SendMessageTimeout(target, 0x00F5, IntPtr.Zero, IntPtr.Zero, 0x0002, 5000, out result) != IntPtr.Zero;
+  }
+}
+'@
 $deadline = (Get-Date).AddSeconds(20)
 $fallbackDialogDismissed = $false
 $fallbackDialogAction = 'not encountered'
@@ -522,11 +545,11 @@ do {
         $fallbackDialogAction = 'known software-rendering dialog detected'
         $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
         if ($ok) {
-          $ok.SetFocus()
-          [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-          $fallbackDialogDismissed = $true
-          $fallbackDialogAction = 'focused the exact-caption OK control and sent Enter'
-          Start-Sleep -Milliseconds 500
+          if ([DemonXCircuitWindowMessages]::ClickChildByCaption([IntPtr]$info.MainWindowHandle, 'OK')) {
+            $fallbackDialogDismissed = $true
+            $fallbackDialogAction = 'sent bounded BM_CLICK to the exact-caption native OK child window'
+            Start-Sleep -Milliseconds 500
+          } else { $fallbackDialogAction = 'known dialog detected but native OK child window was not found or did not respond' }
         } else { $fallbackDialogAction = 'known dialog detected but accessible OK control was absent' }
       } else { $fallbackDialogAction = 'Information window did not match the known OpenGL fallback dialog' }
     } catch { $fallbackDialogAction = ('dialog acknowledgement failed: ' + $_.Exception.Message) }
