@@ -1,0 +1,164 @@
+{
+  "format": "demonx-circuit-owner-gui-acceptance",
+  "formatVersion": "1.0",
+  "status": "PREPARED; owner GUI acceptance NOT TESTED",
+  "testedSourceCommit": "eaa7f89e4761b0e2b71bba3bd334e111187f02a9",
+  "kicadVersion": "10.0.7",
+  "fixture": "DX_LED_Smoke",
+  "sourceEvidence": "reports/checkpoint-5/native-roundtrip/validated-run; CI run 40271029212",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 40,
+      "sha256": "d87d8659818f7d51a913bf8fb5341c5baf2fefeeaf82e65e31f8da32aa31a115"
+    },
+    {
+      "path": "candidate/backups/DX_LED_Smoke.kicad_sch.initial-candidate",
+      "bytes": 12469,
+      "sha256": "ae912994c405a888d48c34e8efbaa0afbf08aadcfe89c11414bc641498cc0953"
+    },
+    {
+      "path": "candidate/DX_LED_Smoke.kicad_pcb",
+      "bytes": 16021,
+      "sha256": "4be40fcb607e356cf6c1686a85b5db0a3bf0cd2bd0e26f2c1cd95ab72e2baf76"
+    },
+    {
+      "path": "candidate/DX_LED_Smoke.kicad_pro",
+      "bytes": 38,
+      "sha256": "f1dc9f3d363576311fb3adf31acb09e1c138f3ea988e810c3387b889be5d13e7"
+    },
+    {
+      "path": "candidate/DX_LED_Smoke.kicad_sch",
+      "bytes": 12469,
+      "sha256": "ae912994c405a888d48c34e8efbaa0afbf08aadcfe89c11414bc641498cc0953"
+    },
+    {
+      "path": "candidate/fp-lib-table",
+      "bytes": 25393,
+      "sha256": "3c6fe7ffaca851ce51ad8ec60c5276d47d1252db0aeee0ef9a71eb6c7895a0ff"
+    },
+    {
+      "path": "candidate/project.json",
+      "bytes": 812,
+      "sha256": "c356c1cd509a1c6a3f9ca0a88f3517adc8c911962b939701d327814b2ba840bb"
+    },
+    {
+      "path": "candidate/reports/roundtrip-candidate-erc.rpt",
+      "bytes": 369,
+      "sha256": "ce6caf71f595455086a8b2e0345144451b931615131184cfe50b5e399a25979e"
+    },
+    {
+      "path": "candidate/reports/roundtrip-candidate.net",
+      "bytes": 6464,
+      "sha256": "68e0d4e2cd02850dc11d153e98da0df7bee3eb416068fb0fa59b0c2deb684378"
+    },
+    {
+      "path": "candidate/sym-lib-table",
+      "bytes": 34145,
+      "sha256": "281d80d7b9c25bb972d12af2dda4bfc1913ae4915f0f80f37464b2612046654d"
+    },
+    {
+      "path": "original/DX_LED_Smoke.kicad_pcb",
+      "bytes": 16021,
+      "sha256": "4be40fcb607e356cf6c1686a85b5db0a3bf0cd2bd0e26f2c1cd95ab72e2baf76"
+    },
+    {
+      "path": "original/DX_LED_Smoke.kicad_pro",
+      "bytes": 38,
+      "sha256": "f1dc9f3d363576311fb3adf31acb09e1c138f3ea988e810c3387b889be5d13e7"
+    },
+    {
+      "path": "original/DX_LED_Smoke.kicad_sch",
+      "bytes": 12459,
+      "sha256": "25762d9ea6110f87b722d771293ea83a9b8bf5a103a6f671ee32daefbdbe8208"
+    },
+    {
+      "path": "original/fp-lib-table",
+      "bytes": 25393,
+      "sha256": "3c6fe7ffaca851ce51ad8ec60c5276d47d1252db0aeee0ef9a71eb6c7895a0ff"
+    },
+    {
+      "path": "original/project.json",
+      "bytes": 810,
+      "sha256": "a970a3e22578c4d8369122cfb3ab236c50af88c64cb11464783fbe559aa794d3"
+    },
+    {
+      "path": "original/reports/roundtrip-original.net",
+      "bytes": 6466,
+      "sha256": "48d548a981a535382de3de2e23b651e4b35e8df0322858f3c2e72894cd3bdbfa"
+    },
+    {
+      "path": "original/sym-lib-table",
+      "bytes": 34145,
+      "sha256": "281d80d7b9c25bb972d12af2dda4bfc1913ae4915f0f80f37464b2612046654d"
+    },
+    {
+      "path": "OWNER-CHECKLIST.md",
+      "bytes": 4496,
+      "sha256": "79d4106153679227d68f48d1fd91cccf9c67bd6d1fcc2f947cc31fb69541958a"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1975,
+      "sha256": "17b11b99b7b68d402feba7b2117ac2bb0315c2101c5b11851260d01abcbf2497"
+    },
+    {
+      "path": "verify-after-save.ps1",
+      "bytes": 4149,
+      "sha256": "ca7adb23aba8c417e14eefc95cba0068c148d8b6a5825ec1ee997e490f0b05b2"
+    },
+    {
+      "path": "write-manifest.ps1",
+      "bytes": 2378,
+      "sha256": "1dbccc78616a4ba765150eb0af2478c1c910953f45651f7f1199910b4d1fb1e1"
+    }
+  ],
+  "expectedComponents": [
+    {
+      "candidateValue": "RED LED",
+      "reference": "D1",
+      "originalValue": "RED LED"
+    },
+    {
+      "candidateValue": "5V INPUT",
+      "reference": "J1",
+      "originalValue": "5V INPUT"
+    },
+    {
+      "candidateValue": "470",
+      "reference": "R1",
+      "ownerReversibleTestValue": "510",
+      "originalValue": "330"
+    }
+  ],
+  "expectedConnectivity": [
+    {
+      "stagedCandidate": true,
+      "pins": [
+        "D1.1",
+        "R1.2"
+      ],
+      "original": true
+    },
+    {
+      "stagedCandidate": true,
+      "pins": [
+        "D1.2",
+        "J1.2"
+      ],
+      "original": true
+    },
+    {
+      "stagedCandidate": true,
+      "pins": [
+        "J1.1",
+        "R1.1"
+      ],
+      "original": true
+    }
+  ],
+  "observedNativeComparison": "Preserved original.net and edited.net have the same pin-to-net groups. The retained staged native candidate does not demonstrate the semantic wiring change described in the earlier interaction acceptance; the owner GUI package does not claim otherwise.",
+  "expectedOwnerRun": "After changing candidate R1 from 470 to 510 in KiCad and saving, the two netlists should match the listed connectivity; ERC should exit 0.",
+  "preparedCandidateBackupSha256": "ae912994c405a888d48c34e8efbaa0afbf08aadcfe89c11414bc641498cc0953",
+  "filesHashAlgorithm": "SHA-256"
+}

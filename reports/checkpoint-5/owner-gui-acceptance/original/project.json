@@ -1,0 +1,37 @@
+{
+  "format": "demonx-project",
+  "formatVersion": "0.1.0",
+  "native": {
+    "files": [
+      "DX_LED_Smoke.kicad_pro",
+      "DX_LED_Smoke.kicad_sch",
+      "DX_LED_Smoke.kicad_pcb"
+    ],
+    "engine": "kicad",
+    "status": "Owner GUI acceptance fixture; not a manufacturing approval",
+    "engineVersion": "10.0.7"
+  },
+  "revision": "cp5-owner-gui",
+  "name": "DX LED Smoke original",
+  "libraries": [],
+  "projectId": "dx-led-smoke-cp5-original",
+  "hardware": {
+    "components": [
+      {
+        "ref": "D1",
+        "value": "RED LED",
+        "kind": "LED"
+      },
+      {
+        "ref": "J1",
+        "value": "5V INPUT",
+        "kind": "connector"
+      },
+      {
+        "ref": "R1",
+        "value": "330",
+        "kind": "resistor"
+      }
+    ]
+  }
+}
