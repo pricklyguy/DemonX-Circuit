@@ -466,13 +466,28 @@ try {
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     const expectedRewiredNets = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
     check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 3 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
+    const stagedDir = join(roundtripRoot, 'schematic-circuit', 'staged');
+    const invalidDisconnect = await wireBetweenCanvasPoint('J1', '1', 'R1', '2'); await click('schematic-select'); await clickCanvasAt(invalidDisconnect.x, invalidDisconnect.y); await waitUntil(`/Connection selected/.test(document.getElementById('schematic-status').textContent)`, 'select the exact pin-to-pin wire for the open-pin case', 5000); await click('schematic-delete');
+    await saveEditorRevision('save deliberately open passive pin revision');
+    const invalidModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('deliberately open passive pin changes the real semantic connectivity', invalidModel?.wires?.length === 2 && packageAdapter.netGroups(invalidModel).length === 4 && packageAdapter.netGroups(invalidModel).filter(group => group.length === 1).length === 2, JSON.stringify({ wires: invalidModel?.wires, nets: invalidModel && packageAdapter.netGroups(invalidModel) }));
+    await click('schematic-stage-native'); await waitUntil(`document.getElementById('result-dialog').open`, 'native ERC evaluates deliberately disconnected passive pin candidate', 120000);
+    const invalidResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
+    const allStageRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
+    const openPinStage = allStageRecords.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
+    const openPinSourcePreserved = packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash;
+    check('KiCad ERC limitation for an open passive pin is recorded without claiming it was rejected', invalidResult.status === 'PASS' && !!openPinStage?.validated && openPinStage.validation.erc.exitCode === 0 && /Found 0 violations/.test(invalidResult.output) && openPinSourcePreserved, JSON.stringify({ status: invalidResult.status, ercExitCode: openPinStage?.validation?.erc?.exitCode, sourcePreserved: openPinSourcePreserved, limitation: 'KiCad ERC does not flag this open passive pin; semantic topology and human review remain necessary.', output: invalidResult.output }));
+    await screenshot('schematic-native-erc-open-passive-pin-limit.png');
+    await clickSelector('#result-dialog .modal-actions button');
+    await click('schematic-undo'); await saveEditorRevision('restore the valid topology after passive-pin ERC limitation test');
+    const restoredValidModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('undo restores the meaningful candidate topology after the open-pin case', JSON.stringify(packageAdapter.netGroups(restoredValidModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify(restoredValidModel && packageAdapter.netGroups(restoredValidModel)));
     await screenshot('schematic-native-edited.png');
 
     await click('schematic-stage-native');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native candidate netlist and ERC result', 120000);
     const stageStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
     const stageOutput = await evaluate(`document.getElementById('result-message').textContent + String.fromCharCode(10) + document.getElementById('result-output').textContent`);
-    const stagedDir = join(roundtripRoot, 'schematic-circuit', 'staged');
     const stagedRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
     const validStage = stagedRecords.filter(record => record.validated).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
     check('Validate & Stage exports native candidate, compares original/candidate netlists and passes actual ERC', stageStatus === 'PASS' && !!validStage && validStage.validation.originalNetlist?.matches && validStage.validation.candidateNetlist?.matches && validStage.validation.erc.exitCode === 0 && /ERC exit code: 0|Candidate ERC exit: 0/.test(stageOutput), stageOutput);
@@ -517,18 +532,7 @@ try {
     check('rollback restores the exact original KiCad schematic', rollbackResult.status === 'PASS' && packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash, JSON.stringify({ ...rollbackResult, restoredSha256: packageAdapter.digest(await readFile(roundtripSchematic)), expectedSha256: nativeOriginalHash }));
     await clickSelector('#result-dialog .modal-actions button');
 
-    await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen restored native LED schematic');
-    const invalidDisconnect = await wireBetweenCanvasPoint('J1', '1', 'R1', '1'); await click('schematic-select'); await clickCanvasAt(invalidDisconnect.x, invalidDisconnect.y); await click('schematic-delete');
-    const invalidModel = await evaluate('window.circuit.loadSchematicModel()');
-    check('deliberately open passive pin changes the real semantic connectivity', invalidModel?.wires?.length === 2 && packageAdapter.netGroups(invalidModel).length === 4 && packageAdapter.netGroups(invalidModel).filter(group => group.length === 1).length === 2, JSON.stringify({ wires: invalidModel?.wires, nets: invalidModel && packageAdapter.netGroups(invalidModel) }));
-    await click('schematic-stage-native'); await waitUntil(`document.getElementById('result-dialog').open`, 'native ERC evaluates deliberately disconnected passive pin candidate', 120000);
-    const invalidResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent,output:document.getElementById('result-output').textContent})`);
-    const allStageRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
-    const openPinStage = allStageRecords.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
-    const openPinSourcePreserved = packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash;
-    check('KiCad ERC limitation for an open passive pin is recorded without claiming it was rejected', invalidResult.status === 'PASS' && !!openPinStage?.validated && openPinStage.validation.erc.exitCode === 0 && /Found 0 violations/.test(invalidResult.output) && openPinSourcePreserved, JSON.stringify({ status: invalidResult.status, ercExitCode: openPinStage?.validation?.erc?.exitCode, sourcePreserved: openPinSourcePreserved, limitation: 'KiCad ERC does not flag this open passive pin; semantic topology and human review remain necessary.', output: invalidResult.output }));
-    await screenshot('schematic-native-erc-open-passive-pin-limit.png');
-    await clickSelector('#result-dialog .modal-actions button'); await click('schematic-back');
+    await click('schematic-back');
   } else {
     for (const name of ['native schematic import', 'native candidate editing', 'native netlist/ERC round-trip', 'native GUI reopen', 'native commit/rollback']) notTested(name, 'Native round-trip project did not create with KiCad on this packaged runner.');
   }
