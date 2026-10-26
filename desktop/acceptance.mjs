@@ -525,8 +525,6 @@ try {
     const rollbackResult = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
     check('rollback restores the exact original KiCad schematic', rollbackResult.status === 'PASS' && packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash, JSON.stringify({ ...rollbackResult, restoredSha256: packageAdapter.digest(await readFile(roundtripSchematic)), expectedSha256: nativeOriginalHash }));
     await clickSelector('#result-dialog .modal-actions button');
-
-    await click('schematic-back');
   } else {
     for (const name of ['native schematic import', 'native candidate editing', 'native netlist/ERC round-trip', 'native GUI reopen', 'native commit/rollback']) notTested(name, 'Native round-trip project did not create with KiCad on this packaged runner.');
   }
