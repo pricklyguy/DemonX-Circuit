@@ -176,6 +176,11 @@ async function wireCanvasPoint(index) {
   if (!point?.insideViewport) throw new Error(`Schematic canvas or wire ${index} is outside the packaged viewport: ${JSON.stringify(point)}`);
   return point;
 }
+async function wireBetweenCanvasPoint(referenceA, numberA, referenceB, numberB) {
+  const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),id=(r,n)=>{const c=m.components.find(v=>v.reference===r);return c&&'pin:'+c.id+':'+n;},aId=id(${JSON.stringify(referenceA)},${JSON.stringify(numberA)}),bId=id(${JSON.stringify(referenceB)},${JSON.stringify(numberB)}),i=m.wires.findIndex(w=>(w.fromNodeId===aId&&w.toNodeId===bId)||(w.fromNodeId===bId&&w.toNodeId===aId)); if(i<0) throw new Error('No imported wire connects the requested pins.'); const w=m.wires[i],node=id=>{const q=/^pin:([^:]+):(.+)$/.exec(id),c=m.components.find(v=>v.id===q?.[1]),p=c?.pins.find(v=>v.number===q?.[2]);if(c&&p){let x=p.x,y=p.y;for(let n=0;n<c.rotation/90;n++)[x,y]=[-y,x];return{x:c.x+x,y:c.y+y};}const j=m.junctions.find(v=>v.id===id);return j?{x:j.x,y:j.y}:null;},a=node(w.fromNodeId),b=node(w.toNodeId),mid=Math.round((a.x+b.x)/2);let wx,wy;if(a.x!==mid){wx=a.x+(mid-a.x)*.2;wy=a.y;}else if(a.y!==b.y){wx=mid;wy=a.y+(b.y-a.y)*.2;}else{wx=mid+(b.x-mid)*.2;wy=b.y;}const e=document.getElementById('schematic-stage');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),s=.85,x=r.left+e.clientWidth/2-50*20*s+wx*20*s,y=r.top+e.clientHeight/2-40*20*s+wy*20*s;return{x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight};})()`);
+  if (!point?.insideViewport) throw new Error(`Schematic canvas or wire ${referenceA}.${numberA}–${referenceB}.${numberB} is outside the packaged viewport: ${JSON.stringify(point)}`);
+  return point;
+}
 async function saveEditorRevision(description) {
   const previous = await evaluate(`document.getElementById('schematic-status').textContent`);
   await click('schematic-save');
@@ -443,7 +448,7 @@ try {
     check('packaged editor rotates imported native component', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
 
     await click('schematic-select');
-    const disconnectPoint = await wireCanvasPoint(0); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
+    const disconnectPoint = await wireBetweenCanvasPoint('R1', '2', 'D1', '1'); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
     await saveEditorRevision('save imported pin disconnection');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor disconnects an imported native pin connection', editModel?.wires?.length === 2, JSON.stringify(editModel?.wires));
@@ -461,7 +466,7 @@ try {
     await click('schematic-stage-native');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native candidate netlist and ERC result', 120000);
     const stageStatus = await evaluate(`document.getElementById('result-kicker').textContent`);
-    const stageOutput = await evaluate(`document.getElementById('result-message').textContent + '\n' + document.getElementById('result-output').textContent`);
+    const stageOutput = await evaluate(`document.getElementById('result-message').textContent + String.fromCharCode(10) + document.getElementById('result-output').textContent`);
     const stagedDir = join(roundtripRoot, 'schematic-circuit', 'staged');
     const stagedRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
     const validStage = stagedRecords.filter(record => record.validated).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
