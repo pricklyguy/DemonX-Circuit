@@ -429,18 +429,22 @@ try {
     let r1Point = await componentCanvasPoint('R1');
     await clickCanvasAt(r1Point.x, r1Point.y);
     await replaceTextInput('#schematic-value', '470');
+    await saveEditorRevision('save imported component value edit');
     let editModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor edits a native component value through mouse and keyboard input', editModel?.components?.find(c => c.reference === 'R1')?.value === '470', JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
     r1Point = await componentCanvasPoint('R1');
     await dragCanvas(r1Point, { x: r1Point.x + 34, y: r1Point.y + 34 });
+    await saveEditorRevision('save imported component move');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor moves imported native component and retains its stable reference', editModel?.components?.find(c => c.reference === 'R1')?.x === 52 && editModel?.components?.find(c => c.reference === 'R1')?.y === 42, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
     r1Point = await componentCanvasPoint('R1'); await clickCanvasAt(r1Point.x, r1Point.y); await click('schematic-rotate');
+    await saveEditorRevision('save imported component rotation');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor rotates imported native component', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
 
     await click('schematic-select');
     const disconnectPoint = await wireCanvasPoint(0); await clickCanvasAt(disconnectPoint.x, disconnectPoint.y); await click('schematic-delete');
+    await saveEditorRevision('save imported pin disconnection');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor disconnects an imported native pin connection', editModel?.wires?.length === 2, JSON.stringify(editModel?.wires));
     await click('schematic-wire');
@@ -448,6 +452,7 @@ try {
     point = await pinCanvasPoint('R1', '2'); await clickCanvasAt(point.x, point.y);
     point = await pinCanvasPoint('R1', '1'); await clickCanvasAt(point.x, point.y);
     point = await pinCanvasPoint('D1', '1'); await clickCanvasAt(point.x, point.y);
+    await saveEditorRevision('save imported pin reconnection');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     const expectedRewiredNets = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
     check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 4 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
