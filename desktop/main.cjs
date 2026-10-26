@@ -405,7 +405,7 @@ async function stageNativeSchematic() {
   const stageDir = safeInside(project.root, 'schematic-circuit/staged');
   const reportDir = safeInside(project.root, `reports/schematic-roundtrip/${stageId}`);
   await fs.mkdir(stageDir, { recursive: true });
-  await fs.mkdir(reportDir, { recursive: false });
+  await fs.mkdir(reportDir, { recursive: true });
   const candidateRelative = `schematic-circuit/staged/${stageId}.kicad_sch`;
   const candidatePath = safeInside(project.root, candidateRelative);
   const reportFiles = ['original.net', 'candidate.net', 'candidate-erc.rpt', 'validation.json'].map(name => safeInside(project.root, `reports/schematic-roundtrip/${stageId}/${name}`));
