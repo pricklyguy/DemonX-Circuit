@@ -522,10 +522,10 @@ do {
         $fallbackDialogAction = 'known software-rendering dialog detected'
         $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
         if ($ok) {
-          $root.SetFocus()
+          $ok.SetFocus()
           [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
           $fallbackDialogDismissed = $true
-          $fallbackDialogAction = 'sent Enter to the focused, exact-text KiCad fallback dialog'
+          $fallbackDialogAction = 'focused the exact-caption OK control and sent Enter'
           Start-Sleep -Milliseconds 500
         } else { $fallbackDialogAction = 'known dialog detected but accessible OK control was absent' }
       } else { $fallbackDialogAction = 'Information window did not match the known OpenGL fallback dialog' }
