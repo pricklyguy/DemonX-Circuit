@@ -499,7 +499,7 @@ try {
     const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
     let editorWindows = [];
     try {
-      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-Process -Name eeschema -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object Id,MainWindowHandle,MainWindowTitle | ConvertTo-Json -AsArray -Compress"], { encoding: 'utf8', timeout: 15000 }).trim();
+      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "$deadline = (Get-Date).AddSeconds(20); $windows = @(); do { $windows = @(Get-Process -Name eeschema -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object Id,MainWindowHandle,MainWindowTitle); if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }; Start-Sleep -Milliseconds 250 } while ((Get-Date) -lt $deadline); $windows | ConvertTo-Json -AsArray -Compress"], { encoding: 'utf8', timeout: 25000 }).trim();
       editorWindows = windowsJson ? JSON.parse(windowsJson) : [];
     } catch {}
     const candidateWindow = editorWindows.find(window => /candidate/i.test(window.MainWindowTitle || '')) || null;
