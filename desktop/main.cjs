@@ -442,7 +442,7 @@ async function stageNativeSchematic() {
   await fs.writeFile(reportFiles[3], `${JSON.stringify(stageRecord.validation, null, 2)}\n`, { flag: 'wx' });
   return result(passed ? 'PASS' : 'FAIL', 'Validate & Stage for KiCad', passed ? 'The staged native schematic matches the DemonX model, both native netlists were compared, and candidate ERC passed. The original is unchanged; review and approve separately to commit.' : 'Validation failed. The native source is unchanged and the staged candidate cannot be committed.', {
     stageId, candidatePath, sourceSha256, candidateSha256: generated.sha256, modelRevision: latest.revision, validation: stageRecord.validation,
-    output: `Source SHA-256: ${sourceSha256}\nCandidate SHA-256: ${generated.sha256}\nOriginal netlist comparison: ${originalComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate netlist comparison: ${candidateComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate ERC exit: ${erc.code}\n${ercText}`,
+    output: `Source SHA-256: ${sourceSha256}\nCandidate SHA-256: ${generated.sha256}\nOriginal netlist comparison: ${originalComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate netlist comparison: ${candidateComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate netlist groups: ${JSON.stringify(candidateComparison)}\nCandidate ERC exit: ${erc.code}\n${ercText}`,
     reportPaths: [candidatePath, safeInside(project.root, `schematic-circuit/staged/${stageId}.json`), ...reportFiles]
   });
 }
