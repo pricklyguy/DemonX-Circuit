@@ -503,6 +503,7 @@ try {
 Add-Type -AssemblyName UIAutomationTypes
 $deadline = (Get-Date).AddSeconds(20)
 $fallbackDialogDismissed = $false
+$fallbackDialogAction = 'not encountered'
 $windows = @()
 do {
   $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle)
@@ -514,11 +515,17 @@ do {
       $children = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
       $texts = @($children | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
       $knownOpenGLFallback = (($texts -join ' ') -match 'Could not use OpenGL, falling back to software rendering') -and (($texts -join ' ') -match 'OpenGL 2\.1 or higher is required!')
-      $ok = $children | Where-Object { $_.Current.Name -eq 'OK' -and $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Button' } | Select-Object -First 1
-      if ($knownOpenGLFallback -and $ok) {
-        $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-        $fallbackDialogDismissed = $true
-        Start-Sleep -Milliseconds 500
+      if ($knownOpenGLFallback) {
+        $fallbackDialogAction = 'known software-rendering dialog detected'
+        $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
+        if ($ok) {
+          try {
+            $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            $fallbackDialogDismissed = $true
+            $fallbackDialogAction = 'invoked accessible OK button'
+            Start-Sleep -Milliseconds 500
+          } catch { $fallbackDialogAction = ('OK invocation failed: ' + $_.Exception.Message) }
+        } else { $fallbackDialogAction = 'known dialog detected but accessible OK control was absent' }
       }
     } catch {}
   }
@@ -533,7 +540,7 @@ $details = @(foreach ($window in $windows) {
       $texts = @($nodes | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
     } catch { $texts += ('UIA error: ' + $_.Exception.Message) }
   }
-  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; DismissedKnownOpenGLFallback = $fallbackDialogDismissed }
+  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; DismissedKnownOpenGLFallback = $fallbackDialogDismissed; FallbackDialogAction = $fallbackDialogAction }
 })
 ConvertTo-Json -InputObject @($details) -Depth 5 -Compress`;
       const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', probeScript], { encoding: 'utf8', timeout: 30000 }).trim();
