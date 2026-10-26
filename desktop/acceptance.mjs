@@ -497,9 +497,13 @@ try {
     await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen editor for native candidate review');
     await click('schematic-open-stage'); await waitUntil(`document.getElementById('result-dialog').open`, 'open staged candidate in KiCad graphical editor', 30000);
     const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
-    let editorWindow = null;
-    try { editorWindow = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-Process -Name eeschema -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1 Id,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress"], { encoding: 'utf8', timeout: 15000 }).trim(); } catch {}
-    check('staged candidate opens in KiCad graphical editor with a visible window', guiOpen.status === 'PASS' && /KiCad .*staged candidate/i.test(guiOpen.message) && !!editorWindow, JSON.stringify({ ...guiOpen, window: editorWindow }));
+    let editorWindows = [];
+    try {
+      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-Process -Name eeschema -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object Id,MainWindowHandle,MainWindowTitle | ConvertTo-Json -AsArray -Compress"], { encoding: 'utf8', timeout: 15000 }).trim();
+      editorWindows = windowsJson ? JSON.parse(windowsJson) : [];
+    } catch {}
+    const candidateWindow = editorWindows.find(window => /candidate/i.test(window.MainWindowTitle || '')) || null;
+    check('staged candidate document appears in a KiCad schematic editor window', guiOpen.status === 'PASS' && /KiCad .*staged candidate/i.test(guiOpen.message) && !!candidateWindow, JSON.stringify({ ...guiOpen, candidateWindow, visibleEeschemaWindows: editorWindows }));
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('schematic-commit-native');
