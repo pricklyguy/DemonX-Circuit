@@ -526,7 +526,7 @@ public static class DemonXCircuitWindowMessages {
 }
 '@
 $deadline = (Get-Date).AddSeconds(20)
-$fallbackDialogDismissed = $false
+$fallbackDialogMessageDelivered = $false
 $fallbackDialogAction = 'not encountered'
 $fallbackDialogAttempted = $false
 $windows = @()
@@ -546,8 +546,8 @@ do {
         $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
         if ($ok) {
           if ([DemonXCircuitWindowMessages]::ClickChildByCaption([IntPtr]$info.MainWindowHandle, 'OK')) {
-            $fallbackDialogDismissed = $true
-            $fallbackDialogAction = 'sent bounded BM_CLICK to the exact-caption native OK child window'
+            $fallbackDialogMessageDelivered = $true
+            $fallbackDialogAction = 'bounded BM_CLICK message was delivered to the exact-caption native OK child window'
             Start-Sleep -Milliseconds 500
           } else { $fallbackDialogAction = 'known dialog detected but native OK child window was not found or did not respond' }
         } else { $fallbackDialogAction = 'known dialog detected but accessible OK control was absent' }
@@ -565,7 +565,7 @@ $details = @(foreach ($window in $windows) {
       $texts = @($nodes | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
     } catch { $texts += ('UIA error: ' + $_.Exception.Message) }
   }
-  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; DismissedKnownOpenGLFallback = $fallbackDialogDismissed; FallbackDialogAction = $fallbackDialogAction }
+  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; FallbackButtonMessageDelivered = $fallbackDialogMessageDelivered; FallbackDialogAction = $fallbackDialogAction }
 })
 ConvertTo-Json -InputObject @($details) -Depth 5 -Compress`;
       const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', probeScript], { encoding: 'utf8', timeout: 30000 }).trim();
