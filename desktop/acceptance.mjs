@@ -497,13 +497,14 @@ try {
     await click('open-circuit-schematic'); await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'reopen editor for native candidate review');
     await click('schematic-open-stage'); await waitUntil(`document.getElementById('result-dialog').open`, 'open staged candidate in KiCad graphical editor', 30000);
     const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
-    let editorWindows = [];
+    let editorWindows = [], editorWindowProbeError = null;
     try {
-      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "$deadline = (Get-Date).AddSeconds(20); $windows = @(); do { $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle); if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }; Start-Sleep -Milliseconds 250 } while ((Get-Date) -lt $deadline); $windows | ConvertTo-Json -AsArray -Compress"], { encoding: 'utf8', timeout: 25000 }).trim();
-      editorWindows = windowsJson ? JSON.parse(windowsJson) : [];
-    } catch {}
+      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "$deadline = (Get-Date).AddSeconds(20); $windows = @(); do { $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle); if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }; Start-Sleep -Milliseconds 250 } while ((Get-Date) -lt $deadline); ConvertTo-Json -InputObject @($windows) -Depth 4 -Compress"], { encoding: 'utf8', timeout: 25000 }).trim();
+      const parsedWindows = windowsJson ? JSON.parse(windowsJson) : [];
+      editorWindows = Array.isArray(parsedWindows) ? parsedWindows : parsedWindows ? [parsedWindows] : [];
+    } catch (error) { editorWindowProbeError = error.message; }
     const candidateWindow = editorWindows.find(window => /candidate/i.test(window.MainWindowTitle || '')) || null;
-    check('staged candidate document appears in a KiCad schematic editor window', guiOpen.status === 'PASS' && /KiCad .*staged candidate/i.test(guiOpen.message) && !!candidateWindow, JSON.stringify({ ...guiOpen, candidateWindow, visibleEeschemaWindows: editorWindows }));
+    check('staged candidate document appears in a KiCad schematic editor window', guiOpen.status === 'PASS' && /KiCad .*staged candidate/i.test(guiOpen.message) && !!candidateWindow, JSON.stringify({ ...guiOpen, candidateWindow, visibleEeschemaWindows: editorWindows, probeError: editorWindowProbeError }));
     await clickSelector('#result-dialog .modal-actions button');
 
     await click('schematic-commit-native');
