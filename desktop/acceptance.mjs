@@ -162,13 +162,19 @@ async function replaceTextInput(selector, text) {
   await sleep(150);
 }
 async function componentCanvasPoint(reference) {
-  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+  const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),e=document.getElementById('schematic-stage'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(),s=.85; const x=r.left+e.clientWidth/2-50*20*s+c.x*20*s,y=r.top+e.clientHeight/2-40*20*s+c.y*20*s; return {x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight}; })()`);
+  if (!point?.insideViewport) throw new Error(`Schematic canvas or ${reference} is outside the packaged viewport: ${JSON.stringify(point)}`);
+  return point;
 }
 async function pinCanvasPoint(reference, number) {
-  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),p=c?.pins.find(item=>item.number===${JSON.stringify(number)}),e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; let x=p.x,y=p.y; for(let i=0;i<c.rotation/90;i++) [x,y]=[-y,x]; return {x:r.left+e.clientWidth/2-50*20*s+(c.x+x)*20*s,y:r.top+e.clientHeight/2-40*20*s+(c.y+y)*20*s}; })()`);
+  const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),p=c?.pins.find(item=>item.number===${JSON.stringify(number)}),e=document.getElementById('schematic-stage'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(),s=.85; let x=p.x,y=p.y; for(let i=0;i<c.rotation/90;i++) [x,y]=[-y,x]; const sx=r.left+e.clientWidth/2-50*20*s+(c.x+x)*20*s,sy=r.top+e.clientHeight/2-40*20*s+(c.y+y)*20*s; return {x:sx,y:sy,insideViewport:sx>=0&&sx<innerWidth&&sy>=0&&sy<innerHeight}; })()`);
+  if (!point?.insideViewport) throw new Error(`Schematic canvas or ${reference}.${number} is outside the packaged viewport: ${JSON.stringify(point)}`);
+  return point;
 }
 async function wireCanvasPoint(index) {
-  return evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),w=m.wires[${index}],node=id=>{const q=/^pin:([^:]+):(.+)$/.exec(id),c=m.components.find(v=>v.id===q?.[1]),p=c?.pins.find(v=>v.number===q?.[2]);if(c&&p){let x=p.x,y=p.y;for(let i=0;i<c.rotation/90;i++)[x,y]=[-y,x];return{x:c.x+x,y:c.y+y};}const j=m.junctions.find(v=>v.id===id);return j?{x:j.x,y:j.y}:null;},a=node(w.fromNodeId),b=node(w.toNodeId),mid=Math.round((a.x+b.x)/2);let worldX,worldY;if(a.x!==mid){worldX=a.x+(mid-a.x)*.2;worldY=a.y;}else if(a.y!==b.y){worldX=mid;worldY=a.y+(b.y-a.y)*.2;}else{worldX=mid+(b.x-mid)*.2;worldY=b.y;}const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85;return{x:r.left+e.clientWidth/2-50*20*s+worldX*20*s,y:r.top+e.clientHeight/2-40*20*s+worldY*20*s};})()`);
+  const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),w=m.wires[${index}],node=id=>{const q=/^pin:([^:]+):(.+)$/.exec(id),c=m.components.find(v=>v.id===q?.[1]),p=c?.pins.find(v=>v.number===q?.[2]);if(c&&p){let x=p.x,y=p.y;for(let i=0;i<c.rotation/90;i++)[x,y]=[-y,x];return{x:c.x+x,y:c.y+y};}const j=m.junctions.find(v=>v.id===id);return j?{x:j.x,y:j.y}:null;},a=node(w.fromNodeId),b=node(w.toNodeId),mid=Math.round((a.x+b.x)/2);let worldX,worldY;if(a.x!==mid){worldX=a.x+(mid-a.x)*.2;worldY=a.y;}else if(a.y!==b.y){worldX=mid;worldY=a.y+(b.y-a.y)*.2;}else{worldX=mid+(b.x-mid)*.2;worldY=b.y;}const e=document.getElementById('schematic-stage');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),s=.85,x=r.left+e.clientWidth/2-50*20*s+worldX*20*s,y=r.top+e.clientHeight/2-40*20*s+worldY*20*s;return{x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight};})()`);
+  if (!point?.insideViewport) throw new Error(`Schematic canvas or wire ${index} is outside the packaged viewport: ${JSON.stringify(point)}`);
+  return point;
 }
 async function saveEditorRevision(description) {
   const previous = await evaluate(`document.getElementById('schematic-status').textContent`);
