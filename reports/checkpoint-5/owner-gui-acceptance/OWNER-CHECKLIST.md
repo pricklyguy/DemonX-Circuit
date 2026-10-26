@@ -10,17 +10,13 @@ The fixture is disposable. First copy or extract the entire package into a new w
 
 ## Steps
 
-1. From the copied package root, check every file against `manifest.json`. The package inventory is SHA-256. Example:
+1. From the copied package root, verify every file against `manifest.json`:
 
    ```powershell
-   $m = Get-Content .\manifest.json -Raw | ConvertFrom-Json
-   foreach ($f in $m.files) {
-     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $PWD $f.path)).Hash.ToLowerInvariant()
-     if ($actual -ne $f.sha256) { throw "Hash mismatch: $($f.path)" }
-   }
+   .\verify-package.ps1
    ```
 
-   Stop if any package hash differs before testing.
+   The verifier hashes canonical LF bytes, so it also works from a Windows Git checkout with CRLF working files. Stop if any file is missing or differs before testing.
 
 2. Open `candidate\DemonX-Circuit-Project-3.kicad_pro` in KiCad Manager, or open `candidate\DemonX-Circuit-Project-3.kicad_sch` with KiCad's schematic editor. Do not edit `original`.
 

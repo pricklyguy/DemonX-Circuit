@@ -17,6 +17,7 @@ This package contains the exact original and accepted staged native schematic ca
 - `original/`: isolated KiCad source project and original netlist.
 - `candidate/`: exact accepted committed native candidate, project/library files, native reports, the CI pre-approval backup, and a separate candidate reset copy for the owner's reversible GUI edit.
 - `verify-after-save.ps1`: read-only KiCad CLI netlist/ERC check after the manual save; it writes only a new timestamped folder under `owner-results/`.
+- `verify-package.ps1`: validates the SHA-256 inventory; CRLF line endings are normalized to LF to match the downloadable Git content.
 - `manifest.json`: SHA-256 inventory and expected observations.
 - `OWNER-CHECKLIST.md`: safe graphical inspection and reversible edit procedure.
 

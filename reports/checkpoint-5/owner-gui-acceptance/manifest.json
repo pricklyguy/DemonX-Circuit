@@ -8,8 +8,8 @@
   "fixture": "DemonX Circuit LED/resistor round-trip candidate",
   "sourceEvidence": "Packaged Windows native round-trip acceptance; workflow run 40318330198",
   "nativeSchematicNames": {
-    "candidate": "DemonX-Circuit-Project-3.kicad_sch",
-    "original": "DemonX-Circuit-Project-3.kicad_sch"
+    "original": "DemonX-Circuit-Project-3.kicad_sch",
+    "candidate": "DemonX-Circuit-Project-3.kicad_sch"
   },
   "sourceSchematicSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1",
   "stagedCandidateSha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7",
@@ -28,10 +28,9 @@
         "R1.1"
       ]
     ],
-    "hostedGraphicalOpen": "BLOCKED: hosted Windows runner has no OpenGL 2.1 support",
-    "candidateNetlistMatches": true,
     "ownerGraphicalOpen": "NOT TESTED",
-    "originalNetlistMatches": true,
+    "candidateErcExitCode": 0,
+    "hostedGraphicalOpen": "BLOCKED: hosted Windows runner has no OpenGL 2.1 support",
     "candidateNetGroups": [
       [
         "D1.1",
@@ -46,9 +45,15 @@
         "R1.2"
       ]
     ],
-    "candidateErcExitCode": 0
+    "candidateNetlistMatches": true,
+    "originalNetlistMatches": true
   },
   "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 14,
+      "sha256": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9"
+    },
     {
       "path": ".gitignore",
       "bytes": 40,
@@ -81,8 +86,8 @@
     },
     {
       "path": "candidate/fp-lib-table",
-      "bytes": 25536,
-      "sha256": "a54adacf3d6ba38e2b3f1faa595896e75f6c92208eda79b6d99737bb61d18a92"
+      "bytes": 25379,
+      "sha256": "99bfa18b35f17e25e128d92a833498a6ee0d446600be97f67f017d03a841338c"
     },
     {
       "path": "candidate/project.json",
@@ -91,8 +96,8 @@
     },
     {
       "path": "candidate/reports/candidate-erc.rpt",
-      "bytes": 369,
-      "sha256": "4f99fbcb8980c393e1aa78493e00221d2dcad603760d5fdaa53fd99a8cdbc993"
+      "bytes": 357,
+      "sha256": "629060e8c9fe531688e6f282cbf0b54c1fce886a93c387b4897f68f728dff787"
     },
     {
       "path": "candidate/reports/candidate.net",
@@ -111,8 +116,8 @@
     },
     {
       "path": "candidate/sym-lib-table",
-      "bytes": 34288,
-      "sha256": "00c4f17f8afc4413c7f6561e1094f3c4188ca53696995558beeaeb89aa8b0404"
+      "bytes": 34063,
+      "sha256": "67d2a4c14bc1361adf87b169b9b11bbb87db1fcc74eceac22aa08d3386d8487f"
     },
     {
       "path": "original/DemonX-Circuit-Project-3.kicad_pcb",
@@ -131,8 +136,8 @@
     },
     {
       "path": "original/fp-lib-table",
-      "bytes": 25536,
-      "sha256": "a54adacf3d6ba38e2b3f1faa595896e75f6c92208eda79b6d99737bb61d18a92"
+      "bytes": 25379,
+      "sha256": "99bfa18b35f17e25e128d92a833498a6ee0d446600be97f67f017d03a841338c"
     },
     {
       "path": "original/project.json",
@@ -146,18 +151,18 @@
     },
     {
       "path": "original/sym-lib-table",
-      "bytes": 34288,
-      "sha256": "00c4f17f8afc4413c7f6561e1094f3c4188ca53696995558beeaeb89aa8b0404"
+      "bytes": 34063,
+      "sha256": "67d2a4c14bc1361adf87b169b9b11bbb87db1fcc74eceac22aa08d3386d8487f"
     },
     {
       "path": "OWNER-CHECKLIST.md",
-      "bytes": 5314,
-      "sha256": "72be53c501cc90f29897529a85d1e840d4eeea73e09ae1c7a325cddacab32926"
+      "bytes": 5150,
+      "sha256": "0b9639e483358d52f2e3db94659595e4c7cd9ef8246bf79e4374659b3940fda5"
     },
     {
       "path": "README.md",
-      "bytes": 2014,
-      "sha256": "4e0ca2f93474df8900ce82911107c69897eea49d487faf0356ba1b293bbfc135"
+      "bytes": 2149,
+      "sha256": "8e56067f30794dc9f7cff0fdb4903ec0bbe1cbe739773e01d869ceb281e04bf4"
     },
     {
       "path": "roundtrip-evidence.json",
@@ -170,84 +175,90 @@
       "sha256": "9b3b59dbd22f0053744d11907b9ee79bfe136ccc4e3e688439b6d65b6449be26"
     },
     {
+      "path": "verify-package.ps1",
+      "bytes": 1496,
+      "sha256": "229ef379ea0520f399ce54b2fef819d465e234534c0776641d5c9b887bf8f547"
+    },
+    {
       "path": "write-manifest.ps1",
-      "bytes": 5051,
-      "sha256": "9fb005f385b468ee0943657fdc36cd661b9bb95d7531a9b88f036d93816b609e"
+      "bytes": 5843,
+      "sha256": "a839b35ccaf895d6093746418bac7ecd209ee78e4d20e7013bbe1ca42cb0a00f"
     }
   ],
   "expectedComponents": [
     {
-      "candidateValue": "RED LED",
+      "originalValue": "RED LED",
       "reference": "D1",
-      "originalValue": "RED LED"
+      "candidateValue": "RED LED"
     },
     {
-      "candidateValue": "5V INPUT",
+      "originalValue": "5V INPUT",
       "reference": "J1",
-      "originalValue": "5V INPUT"
+      "candidateValue": "5V INPUT"
     },
     {
+      "ownerReversibleTestValue": "510",
       "candidateRotation": 90,
       "candidateValue": "470",
-      "ownerReversibleTestValue": "510",
-      "reference": "R1",
-      "originalRotation": 0,
-      "originalPositionMm": [
-        50,
-        40
-      ],
-      "originalValue": "330",
       "candidatePositionMm": [
         52,
         42
+      ],
+      "originalRotation": 0,
+      "reference": "R1",
+      "originalValue": "330",
+      "originalPositionMm": [
+        50,
+        40
       ]
     }
   ],
   "expectedConnectivity": [
     {
+      "original": true,
+      "stagedCandidate": false,
       "pins": [
         "D1.1",
         "R1.2"
-      ],
-      "stagedCandidate": false,
-      "original": true
+      ]
     },
     {
+      "original": false,
+      "stagedCandidate": true,
       "pins": [
         "D1.1",
         "R1.1"
-      ],
-      "stagedCandidate": true,
-      "original": false
+      ]
     },
     {
+      "original": true,
+      "stagedCandidate": true,
       "pins": [
         "D1.2",
         "J1.2"
-      ],
-      "stagedCandidate": true,
-      "original": true
+      ]
     },
     {
+      "original": true,
+      "stagedCandidate": false,
       "pins": [
         "J1.1",
         "R1.1"
-      ],
-      "stagedCandidate": false,
-      "original": true
+      ]
     },
     {
+      "original": false,
+      "stagedCandidate": true,
       "pins": [
         "J1.1",
         "R1.2"
-      ],
-      "stagedCandidate": true,
-      "original": false
+      ]
     }
   ],
   "observedNativeComparison": "The accepted candidate is a meaningful topology change: it exchanges R1.1 and R1.2 between D1.1 and J1.1. Original and candidate KiCad native netlists independently match their expected pin groups; candidate ERC exited 0.",
   "expectedOwnerRun": "Open candidate in KiCad GUI, change R1 470 to 510, save and reopen; then verify distinct original/candidate pin groups and candidate ERC exit 0.",
   "ciPreApprovalBackupSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1",
   "preparedCandidateResetSha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7",
-  "filesHashAlgorithm": "SHA-256"
+  "filesHashAlgorithm": "SHA-256",
+  "filesHashLineEndings": "CRLF normalized to LF; inventory matches Git-stored/downloaded package content"
 }

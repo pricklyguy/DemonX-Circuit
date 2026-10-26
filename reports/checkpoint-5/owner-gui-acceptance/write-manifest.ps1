@@ -1,6 +1,21 @@
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $manifestPath = Join-Path $root 'manifest.json'
+$utf8 = [System.Text.Encoding]::UTF8
+function Get-CanonicalFileInfo([string] $Path) {
+  $raw = [System.IO.File]::ReadAllBytes($Path)
+  $normalized = New-Object 'System.Collections.Generic.List[byte]'
+  for ($i = 0; $i -lt $raw.Length; $i++) {
+    if ($raw[$i] -eq 13 -and $i + 1 -lt $raw.Length -and $raw[$i + 1] -eq 10) {
+      $normalized.Add(10); $i++
+    } else { $normalized.Add($raw[$i]) }
+  }
+  $canonical = $normalized.ToArray()
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try { $digest = [BitConverter]::ToString($sha.ComputeHash($canonical)).Replace('-', '').ToLowerInvariant() }
+  finally { $sha.Dispose() }
+  return @{ bytes = $canonical.Length; sha256 = $digest }
+}
 $evidence = Get-Content -LiteralPath (Join-Path $root 'roundtrip-evidence.json') -Raw | ConvertFrom-Json
 $originalSch = Get-ChildItem -LiteralPath (Join-Path $root 'original') -Filter '*.kicad_sch' -File | Select-Object -First 1
 $candidateSch = Get-ChildItem -LiteralPath (Join-Path $root 'candidate') -Filter '*.kicad_sch' -File | Select-Object -First 1
@@ -17,10 +32,11 @@ $files = Get-ChildItem -LiteralPath $root -File -Recurse |
   Where-Object { $_.FullName -ne $manifestPath -and $_.FullName -notlike (Join-Path $root 'owner-results\*') } |
   Sort-Object { $_.FullName.Substring($root.Length).Replace('\','/') }
 $records = @($files | ForEach-Object {
+  $canonical = Get-CanonicalFileInfo $_.FullName
   [ordered]@{
     path = $_.FullName.Substring($root.Length).TrimStart('\').Replace('\','/')
-    bytes = $_.Length
-    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    bytes = $canonical.bytes
+    sha256 = $canonical.sha256
   }
 })
 $manifest = [ordered]@{
@@ -62,6 +78,7 @@ $manifest = [ordered]@{
   ciPreApprovalBackupSha256 = (Get-FileHash -LiteralPath $acceptanceBackup -Algorithm SHA256).Hash.ToLowerInvariant()
   preparedCandidateResetSha256 = (Get-FileHash -LiteralPath $resetBackup -Algorithm SHA256).Hash.ToLowerInvariant()
   filesHashAlgorithm = 'SHA-256'
+  filesHashLineEndings = 'CRLF normalized to LF; inventory matches Git-stored/downloaded package content'
 }
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 Write-Output "Wrote $manifestPath with $($records.Count) hashed files."
