@@ -464,8 +464,8 @@ try {
     const allStageRecords = await readdir(stagedDir).then(async names => Promise.all(names.filter(name => name.endsWith('.json')).map(name => readFile(join(stagedDir, name), 'utf8').then(JSON.parse)))).catch(() => []);
     const openPinStage = allStageRecords.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).at(-1);
     const openPinSourcePreserved = packageAdapter.digest(await readFile(roundtripSchematic)) === nativeOriginalHash;
-    check('KiCad ERC limitation for disconnected passive pins is recorded without claiming rejection', invalidResult.status === 'PASS' && !!openPinStage?.validated && openPinStage.validation.erc.exitCode === 0 && openPinStage.validation.candidateNetlist?.matches === true && /Found 0 violations/.test(invalidResult.output) && openPinSourcePreserved, JSON.stringify({ status: invalidResult.status, ercExitCode: openPinStage?.validation?.erc?.exitCode, candidateNetlist: openPinStage?.validation?.candidateNetlist, sourcePreserved: openPinSourcePreserved, limitation: 'KiCad ERC does not flag these open passive pins; semantic topology and human review remain necessary.', output: invalidResult.output }));
-    await screenshot('schematic-native-erc-open-passive-pin-limit.png');
+    check('KiCad ERC rejects the deliberately disconnected passive-pin candidate and preserves the source', invalidResult.status === 'FAIL' && !!openPinStage && !openPinStage.validated && openPinStage.validation.erc.exitCode !== 0 && openPinStage.validation.candidateNetlist?.matches === true && /Found [1-9]\d* violations/.test(invalidResult.output) && openPinSourcePreserved, JSON.stringify({ status: invalidResult.status, ercExitCode: openPinStage?.validation?.erc?.exitCode, candidateNetlist: openPinStage?.validation?.candidateNetlist, sourcePreserved: openPinSourcePreserved, output: invalidResult.output }));
+    await screenshot('schematic-native-erc-open-passive-pin-rejected.png');
     await clickSelector('#result-dialog .modal-actions button');
     await click('schematic-wire');
     let point = await pinCanvasPoint('J1', '1'); await clickCanvasAt(point.x, point.y);
