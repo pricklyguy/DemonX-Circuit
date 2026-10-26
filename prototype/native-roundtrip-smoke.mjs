@@ -37,6 +37,8 @@ if (inputWire.fromNodeId === r1Pin1) inputWire.fromNodeId = r1Pin2; else inputWi
 if (ledWire.fromNodeId === r1Pin2) ledWire.fromNodeId = r1Pin1; else ledWire.toNodeId = r1Pin1;
 const candidate = adapter.exportKiCadCandidate(originalText, edited);
 assert.notEqual(candidate.sha256, sourceHash);
+const resistorNativePlacement = candidate.text.match(/\(symbol\s+\(lib_id "Device:R"\)\s+\(at [^)]+\)/s)?.[0];
+assert.match(resistorNativePlacement || '', /\(at [\d.]+ [\d.]+ 270\)/, 'semantic clockwise 90-degree rotation is serialized using KiCad native orientation');
 assert.equal(adapter.sameSemantic(edited, candidate.imported), true, 'native export and reimport preserve edited semantic state');
 assert.deepEqual(adapter.netGroups(candidate.imported), [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']], 'rewiring changes real pin-to-net topology');
 assert.equal(adapter.digest(await readFile(sourcePath, 'utf8')), sourceHash, 'native source remains untouched by staging');

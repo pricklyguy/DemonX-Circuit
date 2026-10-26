@@ -134,7 +134,10 @@ function importKiCadSchematic(sourceText) {
     const uuid = value(native, 'uuid');
     const placement = child(native, 'at');
     if (!reference || !componentValue || !uuid || !placement) throw new Error(`Unsupported native schematic: ${libId} is missing a reference, value, UUID or placement.`);
-    const rotation = ((number(native, 'at', 3) % 360) + 360) % 360;
+    // The semantic editor uses positive clockwise angles in its screen-space
+    // (Y-down) coordinate system. KiCad serializes the inverse orientation.
+    const nativeRotation = ((number(native, 'at', 3) % 360) + 360) % 360;
+    const rotation = (360 - nativeRotation) % 360;
     if (![0, 90, 180, 270].includes(rotation)) throw new Error(`Unsupported native schematic: ${reference} has unsupported rotation ${rotation}.`);
     const component = {
       id: uuid, libId, reference, value: componentValue,
@@ -218,12 +221,13 @@ function exportKiCadCandidate(sourceText, document) {
     const symbol = native.get(component.reference);
     if (!symbol || value(symbol, 'lib_id') !== component.libId || value(symbol, 'uuid') !== component.id) throw new Error(`Conflict: native symbol identity for ${component.reference} changed outside DemonX.`);
     const oldX = number(symbol, 'at', 1), oldY = number(symbol, 'at', 2), oldRotation = number(symbol, 'at', 3);
+    const nextNativeRotation = (360 - component.rotation) % 360;
     const next = { x: mm(component.x), y: mm(component.y) };
-    setChild(symbol, 'at', coordinateNode(next.x, next.y, component.rotation));
+    setChild(symbol, 'at', coordinateNode(next.x, next.y, nextNativeRotation));
     const valueProperty = directProperty(symbol, 'Value');
     if (!valueProperty) throw new Error(`Unsupported native schematic: ${component.reference} has no editable Value property.`);
     valueProperty[2] = component.value;
-    for (const property of direct(symbol, 'property')) moveProperty(property, { x: oldX, y: oldY }, next, oldRotation, component.rotation);
+    for (const property of direct(symbol, 'property')) moveProperty(property, { x: oldX, y: oldY }, next, oldRotation, nextNativeRotation);
   }
   const originalWires = children(root, 'wire');
   const wireNodesById = new Map(originalWires.map(item => [value(item, 'uuid'), item]));
