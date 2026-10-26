@@ -465,9 +465,26 @@ register('schematic-native:open-stage', async stageId => {
   const tools = await getNativeTools();
   if (!tools.eeschema) return result('NOT TESTED', 'Open staged schematic', 'KiCad graphical schematic editor is not available.');
   return new Promise(resolve => {
-    const launched = spawn(tools.eeschema, [candidate], { cwd: project.root, detached: true, stdio: 'ignore', windowsHide: false, shell: false });
-    launched.once('error', error => resolve(result('FAIL', 'Open staged schematic', `KiCad could not be started: ${error.message}`)));
-    launched.once('spawn', () => { launched.unref(); resolve(result('PASS', 'Open staged schematic', `Started KiCad ${tools.kicadVersion} with staged candidate ${path.basename(candidate)}. It remains separate from the source until explicit approval.`, { stageId, candidatePath: candidate, candidateSha256: record.candidateSha256 })); });
+    const launched = spawn(tools.eeschema, [candidate], { cwd: project.root, detached: true, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false, shell: false });
+    let stdout = '', stderr = '', settled = false, startupTimer;
+    const append = (current, chunk) => `${current}${chunk.toString('utf8')}`.slice(-16000);
+    launched.stdout?.on('data', chunk => { stdout = append(stdout, chunk); });
+    launched.stderr?.on('data', chunk => { stderr = append(stderr, chunk); });
+    launched.once('error', error => {
+      if (settled) return; settled = true; clearTimeout(startupTimer);
+      resolve(result('FAIL', 'Open staged schematic', `KiCad could not be started: ${error.message}`, { stageId, candidatePath: candidate }));
+    });
+    launched.once('exit', (code, signal) => {
+      if (settled) return; settled = true; clearTimeout(startupTimer);
+      resolve(result('FAIL', 'Open staged schematic', `KiCad exited before remaining open (code ${code ?? 'unknown'}, signal ${signal || 'none'}).`, { stageId, candidatePath: candidate, exitCode: code, signal, stdout, stderr }));
+    });
+    launched.once('spawn', () => {
+      launched.unref();
+      startupTimer = setTimeout(() => {
+        if (settled) return; settled = true;
+        resolve(result('PASS', 'Open staged schematic', `KiCad ${tools.kicadVersion} started with staged candidate ${path.basename(candidate)} (process ${launched.pid}); the candidate remains separate from the source until explicit approval.`, { stageId, candidatePath: candidate, candidateSha256: record.candidateSha256, processId: launched.pid, stdout, stderr }));
+      }, 1500);
+    });
   });
 });
 register('schematic-native:commit', async (stageId, approved) => {
