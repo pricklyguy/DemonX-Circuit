@@ -1,20 +1,24 @@
 {
   "format": "demonx-project",
-  "formatVersion": "0.1.0",
-  "native": {
-    "files": [
-      "DX_LED_Smoke.kicad_pro",
-      "DX_LED_Smoke.kicad_sch",
-      "DX_LED_Smoke.kicad_pcb"
-    ],
-    "engine": "kicad",
-    "status": "Owner GUI acceptance fixture; not a manufacturing approval",
-    "engineVersion": "10.0.7"
+  "formatVersion": "0.2.0",
+  "projectId": "dx-cp5-owner-original-dx-mvp7gdg5-73fa79",
+  "name": "Checkpoint 5 Owner GUI original",
+  "revision": "cp5-owner-gui-acceptance",
+  "editableSchematic": {
+    "format": "demonx-schematic",
+    "revisions": "schematic-circuit/revisions"
   },
-  "revision": "cp5-owner-gui",
-  "name": "DX LED Smoke original",
   "libraries": [],
-  "projectId": "dx-led-smoke-cp5-original",
+  "native": {
+    "engine": "kicad",
+    "engineVersion": "10.0.7",
+    "files": [
+      "DemonX-Circuit-Project-3.kicad_pro",
+      "DemonX-Circuit-Project-3.kicad_sch",
+      "DemonX-Circuit-Project-3.kicad_pcb"
+    ],
+    "status": "Original KiCad 10.0.7 source snapshot for owner GUI comparison; SHA-256 b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1."
+  },
   "hardware": {
     "components": [
       {
@@ -30,8 +34,16 @@
       {
         "ref": "R1",
         "value": "330",
-        "kind": "resistor"
+        "kind": "resistor",
+        "x": 50,
+        "y": 40,
+        "rotation": 0
       }
     ]
+  },
+  "manufacturing": {
+    "status": "not-created",
+    "coordinateUnits": "mm",
+    "origin": "KiCad auxiliary origin"
   }
 }

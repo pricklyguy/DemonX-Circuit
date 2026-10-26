@@ -1,51 +1,74 @@
 # DemonX Circuit — Owner KiCad GUI Acceptance
 
-This is a disposable acceptance fixture. Copy or extract the complete folder to a new writable temporary directory (for example `%TEMP%\DemonX-Circuit-GUI-Acceptance-<date>`). Do not point it at, or extract over, an existing project. The original and candidate are separate, self-contained folders.
+The fixture is disposable. First copy or extract the entire package into a new writable temporary directory (for example `%TEMP%\DemonX-Circuit-GUI-Acceptance-<date>`). Do not extract over an existing project. Keep the `original` and `candidate` folders separate; edit only the candidate.
 
 ## Prerequisites
 
-- KiCad **10.0.7** installed by the owner.
-- DemonX Circuit development preview available (optional, for the reimport step).
+- KiCad 10.0.7 installed by the owner.
 - Windows PowerShell 5.1 or later.
+- DemonX Circuit preview for the final reimport check.
 
-## Acceptance steps
+## Steps
 
-1. Verify all package files against `manifest.json` using `Get-FileHash -Algorithm SHA256`. The hashes cover the native source files, candidate files, and preserved reports. If a hash differs before testing, stop and mark FAIL.
-2. Open `candidate\DX_LED_Smoke.kicad_pro` in KiCad Manager, or open `candidate\DX_LED_Smoke.kicad_sch` directly with `eeschema.exe`. Do not open the `original` folder for editing.
-3. Inspect references and values: D1=`RED LED`, J1=`5V INPUT`, R1=`470`. Inspect the wires against the three connectivity groups in `manifest.json`. The expected native candidate and original netlists are identical electrically; the recorded staged edit is the R1 value change. The local DemonX semantic editing test exercised wiring changes, but this retained native pair does not evidence a changed native topology.
-4. Exercise editability with a reversible native edit: change R1 from `470` to `510` in the candidate, save, close, and reopen the candidate schematic. Confirm that the reference, wiring, and `510` value remain visible. The original project is never involved in this edit.
-5. From PowerShell, run:
+1. From the copied package root, check every file against `manifest.json`. The package inventory is SHA-256. Example:
+
+   ```powershell
+   $m = Get-Content .\manifest.json -Raw | ConvertFrom-Json
+   foreach ($f in $m.files) {
+     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $PWD $f.path)).Hash.ToLowerInvariant()
+     if ($actual -ne $f.sha256) { throw "Hash mismatch: $($f.path)" }
+   }
+   ```
+
+   Stop if any package hash differs before testing.
+
+2. Open `candidate\DemonX-Circuit-Project-3.kicad_pro` in KiCad Manager, or open `candidate\DemonX-Circuit-Project-3.kicad_sch` with KiCad's schematic editor. Do not edit `original`.
+
+3. Confirm visible references and values: D1=`RED LED`, J1=`5V INPUT`, R1=`470`. Confirm the candidate has the manifest's edited R1 position `(52,42) mm` and rotation `90°`. Inspect the actual wires and pin identities. The staged change is meaningful: R1 pin 1 and pin 2 exchange nets. The expected original groups are `D1.1–R1.2`, `D1.2–J1.2`, `J1.1–R1.1`; the candidate groups are `D1.1–R1.1`, `D1.2–J1.2`, `J1.1–R1.2`.
+
+4. Make one reversible GUI test edit in the candidate: change R1 from `470` to `510`, save, close the schematic editor, and reopen the candidate. Confirm R1 remains `510`, and the references and wires remain editable and visible. This is a disposable copy; the original folder stays untouched.
+
+5. From PowerShell at the copied package root, run native KiCad checks against the original and the saved candidate:
 
    ```powershell
    .\verify-after-save.ps1 -KiCadCli 'C:\Program Files\KiCad\10.0\bin\kicad-cli.exe'
    ```
 
-   If KiCad is installed elsewhere, pass the actual `kicad-cli.exe` path. The script requires version 10.0.7, creates a new timestamped report directory, exports native netlists for original and saved candidate, compares connectivity, and runs ERC on the candidate. It never modifies a schematic. Expected result after step 4: same three pin groups as the manifest, R1 value 510, ERC exit code 0. Inspect the generated `.net` and `.rpt`, not only the summary.
-6. Reopen the candidate project folder in DemonX Circuit. Choose **Open Circuit Schematic**. Confirm R1 is 510 and the wires/pin identities match the just-generated native netlist. If DemonX reports a stale or unsupported revision, record FAIL and retain the reports; do not commit or overwrite anything.
-7. Mark every row in the checklist below. Capture screenshots of the KiCad schematic before and after the edit, and the DemonX reimport. Keep these inside the temporary acceptance folder.
+   If installed elsewhere, pass the actual `kicad-cli.exe` path. The script requires version 10.0.7, exports both native netlists, compares each with its expected connectivity, checks that the original and candidate remain topologically distinct, confirms candidate R1 is `510`, and runs ERC on the saved candidate. It does not modify the schematics. Inspect the newly generated `.net` files and ERC report under `owner-results/`, not only `summary.json`.
+
+6. Open the candidate project in DemonX Circuit and choose **Open Circuit Schematic**. Confirm R1=`510` and that the same three candidate pin groups are shown. Record whether DemonX successfully reimports the KiCad-saved document. A failure should be recorded with logs; do not overwrite either prepared fixture.
+
+7. Capture screenshots of the KiCad candidate before and after the reversible edit and the DemonX reimport. Store them and the CLI reports in the copied temporary package. Fill in every checklist row below with PASS, FAIL, or NOT TESTED and a short evidence reference.
 
 ## Results (owner fills in)
 
 | Check | Result | Evidence / notes |
 |---|---|---|
-| Initial source and candidate hashes match manifest | NOT TESTED | |
+| Package file hashes match manifest before testing | NOT TESTED | |
 | Candidate opens in KiCad 10.0.7 graphical editor | NOT TESTED | |
-| D1, J1, R1 references and values display correctly | NOT TESTED | |
-| Candidate wires match expected pin groups | NOT TESTED | |
+| References, values, position, and rotation display as expected | NOT TESTED | |
+| Candidate wires match the expected changed pin groups | NOT TESTED | |
 | R1 470→510 edit saves and survives KiCad close/reopen | NOT TESTED | |
 | Original project remains unchanged | NOT TESTED | |
-| KiCad 10.0.7 native netlist matches expected connectivity | NOT TESTED | |
-| KiCad ERC on saved candidate completes with no violations | NOT TESTED | |
-| Saved candidate reopens in DemonX with same connectivity | NOT TESTED | |
-| Screenshots and reports retained in temporary package | NOT TESTED | |
+| KiCad native netlists match original and candidate expected groups | NOT TESTED | |
+| Candidate ERC completes with exit code 0 and no violations | NOT TESTED | |
+| KiCad-saved candidate reopens in DemonX with the same connectivity | NOT TESTED | |
+| Screenshots and fresh reports retained in the temporary copy | NOT TESTED | |
 
-## Rollback
+## Restore the candidate copy
 
-After recording results and reimporting in DemonX, close KiCad. To restore the prepared candidate for another run, copy `candidate\backups\DX_LED_Smoke.kicad_sch.initial-candidate` over `candidate\DX_LED_Smoke.kicad_sch`. This overwrites only the disposable candidate in this test package. First verify that the backup hash equals `manifest.json`'s `preparedCandidateBackupSha256`. Never use this procedure against a project outside this package.
+After recording results and completing the reimport check, close KiCad. To reset only the disposable candidate to the exact staged design, first confirm `candidate/backups/DemonX-Circuit-Project-3.kicad_sch.gui-test-reset` matches `manifest.json`'s `preparedCandidateResetSha256`, then copy:
 
-## Safety and interpretation
+```powershell
+Copy-Item -LiteralPath .\candidate\backups\DemonX-Circuit-Project-3.kicad_sch.gui-test-reset `
+  -Destination .\candidate\DemonX-Circuit-Project-3.kicad_sch -Force
+```
 
-- No changes are made to the owner's existing projects, machine-wide settings, registry, or security configuration.
-- This verifies only this small passive LED/resistor fixture and the observed KiCad 10.0.7 behavior. It is not electrical/manufacturing approval.
-- A passing ERC is a tool result, not a complete engineering review.
-- Keep the result separate from the hosted Windows OpenGL limitation. Owner GUI acceptance remains NOT TESTED until the owner completes this checklist.
+This overwrite applies only to the candidate inside the temporary package. Never use it against any project outside that package. `*.initial-candidate` is the original pre-approval rollback copy retained from CI; it is separately hash inventoried and is not the reset source for this GUI edit. The `original` fixture is not used for edits.
+
+## Interpretation
+
+- No machine-wide graphics, registry, security, or existing project settings are changed by this procedure.
+- The fixture is a small LED/resistor schematic, not a manufacturing approval or full engineering review.
+- ERC is one tool result, not proof of electrical suitability.
+- Hosted native netlist/ERC checks passed. Hosted graphical opening is blocked by the runner's OpenGL 2.1 limitation. Owner GUI acceptance remains **NOT TESTED** until this checklist is completed.

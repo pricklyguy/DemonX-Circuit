@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="E">
   <design>
-    <source>C:\Users\ogbul\Documents\Github\DemonX-Circuit\reports\checkpoint-5\native-roundtrip\validated-run\edited\DX_LED_Smoke.kicad_sch</source>
-    <date>2026-10-25T06:04:01</date>
+    <source>C:\Users\RUNNER~1\AppData\Local\Temp\demonx-circuit-acceptance-zNl9pq\DemonX Circuit Projects\DemonX-Circuit-Project-3\reports\schematic-roundtrip\mvp7gnhz-5c3fdf857a\candidate.kicad_sch</source>
+    <date>2026-10-26T12:00:51</date>
     <tool>Eeschema 10.0.7</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -10,7 +10,7 @@
         <company/>
         <rev/>
         <date/>
-        <source>DX_LED_Smoke.kicad_sch</source>
+        <source>candidate.kicad_sch</source>
         <comment number="1" value=""/>
         <comment number="2" value=""/>
         <comment number="3" value=""/>
@@ -33,12 +33,12 @@
         <field name="Description"/>
       </fields>
       <libsource lib="Device" part="LED" description="Light emitting diode"/>
-      <property name="Sheetname" value="DX_LED_Smoke"/>
-      <property name="Sheetfile" value="DX_LED_Smoke.kicad_sch"/>
+      <property name="Sheetname" value="candidate"/>
+      <property name="Sheetfile" value="candidate.kicad_sch"/>
       <property name="ki_keywords" value="LED diode"/>
       <property name="ki_fp_filters" value="LED* LED_SMD:* LED_THT:*"/>
       <sheetpath names="/" tstamps="/"/>
-      <tstamps>d9fd97d0-6e5b-40cf-82b9-de459a3388e2</tstamps>
+      <tstamps>4c72a159-8a05-443e-b3b9-6d1f9163eebb</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -57,12 +57,12 @@
         <field name="Description"/>
       </fields>
       <libsource lib="Connector_Generic" part="Conn_01x02" description="Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
-      <property name="Sheetname" value="DX_LED_Smoke"/>
-      <property name="Sheetfile" value="DX_LED_Smoke.kicad_sch"/>
+      <property name="Sheetname" value="candidate"/>
+      <property name="Sheetfile" value="candidate.kicad_sch"/>
       <property name="ki_keywords" value="connector"/>
       <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
       <sheetpath names="/" tstamps="/"/>
-      <tstamps>7bbb7832-031a-4aa9-adc8-853c1a64108f</tstamps>
+      <tstamps>ef3947a2-872f-4e48-ba74-50db3a7250e6</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -81,12 +81,12 @@
         <field name="Description"/>
       </fields>
       <libsource lib="Device" part="R" description="Resistor"/>
-      <property name="Sheetname" value="DX_LED_Smoke"/>
-      <property name="Sheetfile" value="DX_LED_Smoke.kicad_sch"/>
+      <property name="Sheetname" value="candidate"/>
+      <property name="Sheetfile" value="candidate.kicad_sch"/>
       <property name="ki_keywords" value="R res resistor"/>
       <property name="ki_fp_filters" value="R_*"/>
       <sheetpath names="/" tstamps="/"/>
-      <tstamps>10f80768-ac34-4205-9d5e-14f1d2adabca</tstamps>
+      <tstamps>a9552dae-8f1e-4450-8313-3e78777f0d55</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -164,7 +164,7 @@
   <nets>
     <net code="1" name="/5V_IN" class="Default">
       <node ref="J1" pin="1" pinfunction="Pin_1_1" pintype="passive"/>
-      <node ref="R1" pin="1" pintype="passive"/>
+      <node ref="R1" pin="2" pintype="passive"/>
     </net>
     <net code="2" name="/GND" class="Default">
       <node ref="D1" pin="2" pinfunction="A_2" pintype="passive"/>
@@ -172,7 +172,7 @@
     </net>
     <net code="3" name="Net-(D1-K)" class="Default">
       <node ref="D1" pin="1" pinfunction="K_1" pintype="passive"/>
-      <node ref="R1" pin="2" pintype="passive"/>
+      <node ref="R1" pin="1" pintype="passive"/>
     </net>
   </nets>
 </export>

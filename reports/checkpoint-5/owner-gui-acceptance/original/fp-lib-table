@@ -155,4 +155,6 @@
 	(lib (name "Transistor_Power_Module") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Transistor_Power_Module.pretty") (options "") (descr "Transistor Power Modules"))
 	(lib (name "Valve") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Valve.pretty") (options "") (descr "Valve"))
 	(lib (name "Varistor") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Varistor.pretty") (options "") (descr "Varistor"))
+
+  (lib (name "DemonX_Project")(type "KiCad")(uri "${KIPRJMOD}/libraries/DemonX_Project.pretty")(options "")(descr "Project-owned footprints"))
 )

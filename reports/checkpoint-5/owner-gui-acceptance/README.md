@@ -1,19 +1,23 @@
-# Owner GUI acceptance fixture
+# Owner KiCad GUI acceptance fixture
 
-Copy this directory to a fresh temporary folder, then follow [OWNER-CHECKLIST.md](OWNER-CHECKLIST.md). The prepared project is for KiCad 10.0.7 and the DemonX Circuit development preview. No setup script launches KiCad or changes files.
+This package contains the exact original and accepted staged native schematic captured by the packaged Windows round-trip acceptance run. Copy the complete directory to a new, writable temporary location before testing. Never extract over or edit an existing project.
 
-## Fixture provenance
+## Evidence and scope
 
-The native source and staged candidate are preserved from `reports/checkpoint-5/native-roundtrip/validated-run` (KiCad 10.0.7 round-trip evidence for commit `eaa7f89e4761b0e2b71bba3bd334e111187f02a9`). The candidate changes R1 from 330 to 470. The accompanying original and candidate KiCad XML netlists currently have identical pin groups. Thus, while the accepted hosted editor interaction evidence includes a semantic wiring edit, the locally retained native files do **not** show a corresponding native topology change. The package makes this limitation visible rather than claiming that it does.
+- Source acceptance commit: `c6f016acf775802025b92863ec627c15db5db9da`.
+- KiCad version used for native export/ERC: 10.0.7.
+- Original schematic SHA-256: `b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1`.
+- Staged committed candidate SHA-256: `9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7`.
+- `roundtrip-evidence.json` records the exact staged candidate, component edits, native netlist comparison, ERC exit code, and original backup hash.
+- Native CI verification passed: both native netlists matched their expected connectivity, and candidate ERC exited 0. The candidate intentionally changes topology; the complete expected groups are in the manifest and checklist.
+- Hosted KiCad GUI launch is **BLOCKED** because that runner lacks OpenGL 2.1. Owner-machine GUI inspection, a reversible GUI edit/save/reopen, and DemonX reimport after that owner edit remain **NOT TESTED**.
 
-The candidate schematic hash is recorded in `manifest.json`; the prepared backup has the same hash. `candidate/reports/roundtrip-candidate-erc.rpt` is the preserved native KiCad report, which reports 0 errors and 0 warnings for that candidate. The owner-run PowerShell script creates fresh, timestamped reports after the reversible 470→510 edit.
+## Files
 
-## Contents
-
-- `original/`: separate native project snapshot and source netlist.
-- `candidate/`: separate native project snapshot with staged schematic, original board fixture, saved native netlist/ERC evidence, and non-overwriting restore copy.
-- `verify-after-save.ps1`: pinned-version KiCad CLI netlist and ERC check. It only reads project files and writes a new folder under `owner-results/`.
+- `original/`: isolated KiCad source project and original netlist.
+- `candidate/`: exact accepted committed native candidate, project/library files, native reports, the CI pre-approval backup, and a separate candidate reset copy for the owner's reversible GUI edit.
+- `verify-after-save.ps1`: read-only KiCad CLI netlist/ERC check after the manual save; it writes only a new timestamped folder under `owner-results/`.
 - `manifest.json`: SHA-256 inventory and expected observations.
-- `OWNER-CHECKLIST.md`: GUI inspection, reversible edit, DemonX reimport, result recording, and rollback steps.
+- `OWNER-CHECKLIST.md`: safe graphical inspection and reversible edit procedure.
 
-The board file is included to make both folders valid KiCad projects; this checkpoint is schematic-only and makes no PCB verification or manufacturing claim.
+The PCB file is included because KiCad projects contain both schematic and board documents. This checkpoint verifies the schematic workflow only; it does not approve the board or manufacturing.

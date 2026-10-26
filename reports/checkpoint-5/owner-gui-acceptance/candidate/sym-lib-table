@@ -223,4 +223,6 @@
 	(lib (name "Triac_Thyristor") (type "KiCad") (uri "${KICAD10_SYMBOL_DIR}/Triac_Thyristor.kicad_sym") (options "") (descr "TRIAC and thyristor symbols"))
 	(lib (name "Valve") (type "KiCad") (uri "${KICAD10_SYMBOL_DIR}/Valve.kicad_sym") (options "") (descr "Valve symbols"))
 	(lib (name "Video") (type "KiCad") (uri "${KICAD10_SYMBOL_DIR}/Video.kicad_sym") (options "") (descr "Video symbols"))
+
+  (lib (name "DemonX_Project")(type "KiCad")(uri "${KIPRJMOD}/libraries/DemonX_Project.kicad_sym")(options "")(descr "Project-owned symbols"))
 )
