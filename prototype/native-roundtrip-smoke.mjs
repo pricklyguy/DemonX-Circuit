@@ -41,6 +41,15 @@ const resistorNativePlacement = candidate.text.match(/\(symbol\s+\(lib_id "Devic
 assert.match(resistorNativePlacement || '', /\(at [\d.]+ [\d.]+ 270\)/, 'semantic clockwise 90-degree rotation is serialized using KiCad native orientation');
 assert.equal(adapter.sameSemantic(edited, candidate.imported), true, 'native export and reimport preserve edited semantic state');
 assert.deepEqual(adapter.netGroups(candidate.imported), [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']], 'rewiring changes real pin-to-net topology');
+const modelApi = require(resolve('desktop', 'dist', 'schematic-model.js'));
+const routed = modelApi.routeSchematicWires(candidate.imported);
+assert.deepEqual(routed.errors, [], 'KiCad reimport produces collision-free orthogonal routes without changing the semantic model');
+assert.deepEqual(adapter.netGroups(candidate.imported), [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']], 'native import/reexport retains each expected pin-to-net assignment');
+assert.deepEqual(modelApi.findSupplyShorts(candidate.imported), [], 'native edited candidate keeps 5V_IN and GND separate');
+const deliberateShort = structuredClone(candidate.imported);
+const connector = deliberateShort.components.find(component => component.reference === 'J1');
+deliberateShort.wires.push({ id: 'deliberate-native-short', fromNodeId: `pin:${connector.id}:1`, toNodeId: `pin:${connector.id}:2` });
+assert.ok(modelApi.findSupplyShorts(deliberateShort).length > 0, 'a deliberate native semantic 5V-to-GND connection is flagged');
 assert.equal(adapter.digest(await readFile(sourcePath, 'utf8')), sourceHash, 'native source remains untouched by staging');
 
 const disconnected = structuredClone(edited);
@@ -59,4 +68,4 @@ const offGrid = structuredClone(imported);
 offGrid.components.find(component => component.reference === 'R1').x += 0.25;
 assert.throws(() => adapter.exportKiCadCandidate(originalText, offGrid), /50 mil grid|grid/i, 'off-grid edit is refused rather than rounded into a lossy export');
 
-console.log(`PASS: imported ${imported.components.length} native components and ${imported.wires.length} wires; value/move/rotation/reconnect round-trip changes net topology; source hash ${sourceHash} remains unchanged; unsupported no-connect and off-grid edits are refused.`);
+console.log(`PASS: imported ${imported.components.length} native components and ${imported.wires.length} wires; meaningful native connectivity change survives reimport; generated geometry is checked against the imported graph; explicit 5V-to-GND shorts are flagged; source hash ${sourceHash} remains unchanged; unsupported no-connect and off-grid edits are refused.`);

@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { validateSchematic } = require('./dist/schematic-model.js');
+const { findSupplyShorts, routeSchematicWires, validateSchematic } = require('./dist/schematic-model.js');
 const schematicAdapter = require('./kicad-schematic-adapter.cjs');
 
 const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
@@ -451,6 +451,8 @@ register('schematic-native:stage', async model => {
   const project = ensureProject();
   const validationIssues = validateSchematic(model);
   if (validationIssues.length) throw new Error(`Schematic validation failed; no candidate was staged. ${validationIssues.join(' ')}`);
+  const displaySafetyIssues = [...findSupplyShorts(model), ...routeSchematicWires(model).errors];
+  if (displaySafetyIssues.length) throw new Error(`Display/electrical safety validation failed; no native candidate was staged. ${displaySafetyIssues.join(' ')}`);
   const saved = await storeSchematicRevision(project.root, model);
   const staged = await stageNativeSchematic();
   return { ...staged, modelRevision: saved.revision, message: `${saved.message} ${staged.message}` };

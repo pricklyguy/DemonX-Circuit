@@ -15,6 +15,7 @@ const executable = resolve(process.argv[2] || '');
 if (!process.argv[2]) throw new Error('Usage: node desktop/acceptance.mjs <portable-exe> <artifact-dir>');
 const require = createRequire(import.meta.url);
 const packageAdapter = require(join(dirname(executable), 'resources', 'app', 'desktop', 'kicad-schematic-adapter.cjs'));
+const packageModel = require(join(dirname(executable), 'resources', 'app', 'desktop', 'dist', 'schematic-model.js'));
 const artifactDir = resolve(process.argv[3] || 'reports/desktop-acceptance');
 await mkdir(artifactDir, { recursive: true });
 const workDir = await mkdtemp(join(tmpdir(), 'demonx-circuit-acceptance-'));
@@ -476,7 +477,11 @@ try {
     editModel = await evaluate('window.circuit.loadSchematicModel()');
     const expectedRewiredNets = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
     check('packaged editor reconnects actual pins with a meaningful netlist topology change', editModel?.wires?.length === 3 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets), JSON.stringify({ wires: editModel?.wires?.length, nets: editModel && packageAdapter.netGroups(editModel) }));
+    const routedGeometry = packageModel.routeSchematicWires(editModel);
+    check('packaged LED/resistor display routes are orthogonal and have no cross-net touch or crossing', routedGeometry.errors.length === 0 && routedGeometry.routes.length === editModel?.wires?.length && routedGeometry.routes.every(route => route.points.every((point, index) => index === 0 || route.points[index - 1].x === point.x || route.points[index - 1].y === point.y)), JSON.stringify(routedGeometry));
+    check('packaged display geometry preserves all three native semantic nets and flags no supply short', JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(expectedRewiredNets) && packageModel.findSupplyShorts(editModel).length === 0, JSON.stringify({ nets: packageAdapter.netGroups(editModel), shortFlags: packageModel.findSupplyShorts(editModel) }));
     await screenshot('schematic-native-edited.png');
+    await screenshot('schematic-native-routed-no-short.png');
 
     await click('schematic-stage-native');
     await waitUntil(`document.getElementById('result-dialog').open`, 'native candidate netlist and ERC result', 120000);

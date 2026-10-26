@@ -1,5 +1,5 @@
 import Konva from 'konva';
-import { cloneDocument, COMPONENT_LIBRARY, pinId, pointForNode, validateSchematic, type SchematicDocument, type SchematicComponent } from './schematic-model';
+import { cloneDocument, COMPONENT_LIBRARY, findSupplyShorts, pinId, pointForNode, routeSchematicWires, validateSchematic, type SchematicDocument, type SchematicComponent } from './schematic-model';
 
 const GRID = 20;
 const MIN_SCALE = 0.45;
@@ -21,6 +21,8 @@ let history: string[] = [];
 let redoHistory: string[] = [];
 let spaceDown = false;
 let searchText = '';
+let showPinNumbers = false;
+let showPinNames = false;
 let toolbarInstalled = false;
 let globalKeysInstalled = false;
 
@@ -114,23 +116,30 @@ function drawGrid(width: number, height: number) {
 function drawWires() {
   if (!documentModel || !layer) return;
   const style = colors();
+  const routed = routeSchematicWires(documentModel);
+  const designErrors = [...findSupplyShorts(documentModel), ...routed.errors];
   for (const wire of documentModel.wires) {
-    const a = nodeXY(wire.fromNodeId), b = nodeXY(wire.toNodeId);
-    if (!a || !b) continue;
-    const midX = snap((a.x + b.x) / 2);
-    const points = [a.x, a.y, midX, a.y, midX, b.y, b.x, b.y];
+    const route = routed.routes.find(item => item.wireId === wire.id);
+    if (!route) continue;
+    const points = route.points.flatMap(point => [point.x * GRID, point.y * GRID]);
     const line = new Konva.Line({ points, stroke: selectedWireId === wire.id ? style.copper : style.wire, strokeWidth: selectedWireId === wire.id ? 3.2 : 2.1, lineCap: 'square', lineJoin: 'miter', hitStrokeWidth: 14, name: 'wire', id: wire.id });
     line.on('click tap', event => { if (mode === 'select') { event.cancelBubble = true; selectedWireId = wire.id; selectedComponentId = null; renderProperties(); draw(); setStatus('Connection selected. Use Delete to disconnect these native pins.'); } });
     layer.add(line);
   }
   for (const junction of documentModel.junctions) {
-    const dot = new Konva.Circle({ x: junction.x * GRID, y: junction.y * GRID, radius: 3.7, fill: style.wire, stroke: style.panel, strokeWidth: 1, name: 'junction', id: junction.id });
+    const dot = new Konva.Circle({ x: junction.x * GRID, y: junction.y * GRID, radius: 5, fill: style.copper, stroke: style.panel, strokeWidth: 2, name: 'junction', id: junction.id });
     dot.on('click tap', event => { event.cancelBubble = true; if (mode === 'wire') handlePin(junction.id); });
     layer.add(dot);
   }
   for (const label of documentModel.labels) {
     const point = nodeXY(label.nodeId);
-    if (point) layer.add(new Konva.Text({ x: point.x + 8, y: point.y - 18, text: label.name, fontFamily: 'Consolas, monospace', fontSize: 11, fill: style.copper, listening: false }));
+    if (point) layer.add(new Konva.Text({ x: point.x - Math.max(38, label.name.length * 7) - 8, y: point.y - 8, width: Math.max(38, label.name.length * 7), align: 'right', text: label.name, fontFamily: 'Consolas, monospace', fontSize: 11, fill: style.copper, listening: false }));
+  }
+  if (designErrors.length) {
+    const warning = new Konva.Label({ x: 12, y: 12, listening: false });
+    warning.add(new Konva.Tag({ fill: '#7d2727', cornerRadius: 4, opacity: 0.96 }));
+    warning.add(new Konva.Text({ text: `DESIGN ERROR · ${designErrors[0]}`, padding: 8, fill: '#ffffff', fontSize: 12, fontFamily: 'Segoe UI, sans-serif' }));
+    layer.add(warning);
   }
   if (wireStart) {
     const a = nodeXY(wireStart);
@@ -162,6 +171,10 @@ function drawComponent(component: SchematicComponent) {
     dot.on('mouseleave', () => { if (stage) stage.container().style.cursor = mode === 'wire' ? 'crosshair' : 'default'; });
     dot.on('click tap', event => { event.cancelBubble = true; handlePin(pinNode); });
     group.add(dot);
+    if (showPinNumbers || showPinNames) {
+      const identity = [showPinNumbers ? pin.number : '', showPinNames ? pin.name : ''].filter(Boolean).join(' · ');
+      group.add(new Konva.Text({ x: pin.x * GRID + 5, y: pin.y * GRID + 4, text: identity, fontFamily: 'Consolas, monospace', fontSize: 9, fill: style.muted, listening: false }));
+    }
   }
   group.on('click tap', event => { event.cancelBubble = true; if (mode === 'select') { selectedComponentId = component.id; selectedWireId = null; renderProperties(); draw(); } });
   group.on('dragstart', () => { pushHistory(); });
@@ -292,14 +305,14 @@ function installToolbar() {
   document.getElementById('schematic-back')?.addEventListener('click', () => { wireStart = null; document.getElementById('schematic-workspace')?.classList.add('hidden'); document.getElementById('welcome')?.classList.remove('hidden'); document.getElementById('workspace-grid')?.classList.remove('hidden'); });
   document.getElementById('schematic-save')?.addEventListener('click', async () => {
     if (!documentModel || !saveModel) return;
-    const issues = validateSchematic(documentModel);
+    const issues = [...validateSchematic(documentModel), ...findSupplyShorts(documentModel), ...routeSchematicWires(documentModel).errors];
     if (issues.length) { setStatus(issues.join(' '), true); return; }
     try { const revision = await saveModel(cloneDocument(documentModel)); setStatus(`Saved local DemonX revision ${revision}. Native KiCad checks do not include these edits until a candidate is validated and committed.`); }
     catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
   });
   document.getElementById('schematic-stage-native')?.addEventListener('click', async () => {
     if (!documentModel || !stageCandidate) return;
-    const issues = validateSchematic(documentModel);
+    const issues = [...validateSchematic(documentModel), ...findSupplyShorts(documentModel), ...routeSchematicWires(documentModel).errors];
     if (issues.length) { setStatus(issues.join(' '), true); return; }
     try {
       const staged = await stageCandidate(cloneDocument(documentModel));
@@ -319,6 +332,11 @@ function installToolbar() {
   document.getElementById('schematic-zoom-in')?.addEventListener('click', () => zoom(1.15));
   document.getElementById('schematic-zoom-out')?.addEventListener('click', () => zoom(0.87));
   document.getElementById('schematic-fit')?.addEventListener('click', fit);
+  for (const id of ['schematic-pin-numbers', 'schematic-pin-names']) document.getElementById(id)?.addEventListener('change', event => {
+    const target = event.target as HTMLInputElement;
+    if (id === 'schematic-pin-numbers') showPinNumbers = target.checked; else showPinNames = target.checked;
+    draw();
+  });
 }
 function showComponentChoices() {
   const list = document.getElementById('component-choices'); if (!list) return;
