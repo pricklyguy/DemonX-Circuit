@@ -499,7 +499,44 @@ try {
     const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
     let editorWindows = [], editorWindowProbeError = null;
     try {
-      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; $deadline = (Get-Date).AddSeconds(20); $windows = @(); do { $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle); if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }; Start-Sleep -Milliseconds 250 } while ((Get-Date) -lt $deadline); $details = @(foreach ($window in $windows) { $texts = @(); if ($window.MainWindowHandle -ne 0) { try { $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$window.MainWindowHandle); $nodes = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition); foreach ($node in $nodes) { $name = $node.Current.Name; if ($name) { $texts += $name } } } catch { $texts += ('UIA error: ' + $_.Exception.Message) } }; [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts } }); ConvertTo-Json -InputObject @($details) -Depth 5 -Compress"], { encoding: 'utf8', timeout: 30000 }).trim();
+      const probeScript = String.raw`Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$deadline = (Get-Date).AddSeconds(20)
+$fallbackDialogDismissed = $false
+$windows = @()
+do {
+  $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle)
+  if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }
+  $info = $windows | Where-Object { $_.MainWindowTitle -eq 'Information' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+  if ($info) {
+    try {
+      $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$info.MainWindowHandle)
+      $children = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+      $texts = @($children | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+      $knownOpenGLFallback = (($texts -join ' ') -match 'Could not use OpenGL, falling back to software rendering') -and (($texts -join ' ') -match 'OpenGL 2\.1 or higher is required!')
+      $ok = $children | Where-Object { $_.Current.Name -eq 'OK' -and $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Button' } | Select-Object -First 1
+      if ($knownOpenGLFallback -and $ok) {
+        $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        $fallbackDialogDismissed = $true
+        Start-Sleep -Milliseconds 500
+      }
+    } catch {}
+  }
+  Start-Sleep -Milliseconds 250
+} while ((Get-Date) -lt $deadline)
+$details = @(foreach ($window in $windows) {
+  $texts = @()
+  if ($window.MainWindowHandle -ne 0) {
+    try {
+      $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$window.MainWindowHandle)
+      $nodes = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+      $texts = @($nodes | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+    } catch { $texts += ('UIA error: ' + $_.Exception.Message) }
+  }
+  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; DismissedKnownOpenGLFallback = $fallbackDialogDismissed }
+})
+ConvertTo-Json -InputObject @($details) -Depth 5 -Compress`;
+      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', probeScript], { encoding: 'utf8', timeout: 30000 }).trim();
       const parsedWindows = windowsJson ? JSON.parse(windowsJson) : [];
       editorWindows = Array.isArray(parsedWindows) ? parsedWindows : parsedWindows ? [parsedWindows] : [];
     } catch (error) { editorWindowProbeError = error.message; }
