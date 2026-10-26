@@ -350,7 +350,7 @@ export function mount(initialDocument: SchematicDocument, save: SaveSchematic, s
   if (!container) throw new Error('Schematic workspace is missing its canvas.');
   const issues = validateSchematic(initialDocument);
   if (issues.length) throw new Error(`This schematic model cannot be opened safely: ${issues.join(' ')}`);
-  documentModel = cloneDocument(initialDocument); saveModel = save; stageCandidate = stageCandidateAction; history = []; redoHistory = []; selectedComponentId = null; selectedWireId = null; wireStart = null;
+  documentModel = cloneDocument(initialDocument); saveModel = save; stageCandidate = stageCandidateAction; history = []; redoHistory = []; selectedComponentId = null; selectedWireId = null; wireStart = null; mode = 'select';
   if (stage) stage.destroy();
   stage = new Konva.Stage({ container: container as HTMLDivElement, width: container.clientWidth, height: container.clientHeight });
   stage.scale({ x: 0.85, y: 0.85 });

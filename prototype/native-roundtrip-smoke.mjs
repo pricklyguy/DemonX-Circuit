@@ -47,7 +47,9 @@ const invalidCandidate = adapter.exportKiCadCandidate(originalText, disconnected
 assert.equal(adapter.sameSemantic(disconnected, invalidCandidate.imported), true, 'disconnected semantic edit can be staged for native ERC rejection');
 
 let refused = false;
-try { adapter.importKiCadSchematic(originalText.replace('(sheet_instances', '(no_connect (at 1 2) (uuid "00000000-0000-4000-8000-000000000000")) (sheet_instances')); }
+const rootClose = originalText.trimEnd().lastIndexOf(')');
+const unsupportedText = `${originalText.trimEnd().slice(0, rootClose)} (no_connect (at 1 2) (uuid "00000000-0000-4000-8000-000000000000")) ${originalText.trimEnd().slice(rootClose)}`;
+try { adapter.importKiCadSchematic(unsupportedText); }
 catch (error) { refused = /Unsupported native KiCad construct “no_connect”/.test(error.message); }
 assert.equal(refused, true, 'unsupported electrical constructs are explicitly refused');
 

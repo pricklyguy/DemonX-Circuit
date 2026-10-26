@@ -413,7 +413,9 @@ try {
     roundtripEditorOpened = await waitUntil(`!document.getElementById('schematic-workspace').classList.contains('hidden')`, 'open native-imported LED schematic in DemonX', 5000).then(() => true).catch(() => false);
     const importedModel = await evaluate('window.circuit.loadSchematicModel()');
     check('packaged editor imports native references, values, coordinates, orientations, pins, labels and wires', roundtripEditorOpened && importedModel?.components?.map(c => [c.reference, c.value, c.x, c.y, c.rotation]).some(c => c.join('|') === 'R1|330|50|40|0') && importedModel.components.length === 3 && importedModel.wires.length === 3 && packageAdapter.netGroups(importedModel).length === 3, JSON.stringify({ components: importedModel?.components?.map(c => [c.reference, c.value, c.x, c.y, c.rotation]), nets: importedModel && packageAdapter.netGroups(importedModel) }));
-    const unsupportedNative = Buffer.concat([nativeOriginal.subarray(0, nativeOriginal.length - 1), Buffer.from(' (no_connect (at 1 2) (uuid "00000000-0000-4000-8000-000000000000"))\n)')]);
+    const unsupportedText = nativeOriginal.toString('utf8').trimEnd();
+    const rootClose = unsupportedText.lastIndexOf(')');
+    const unsupportedNative = Buffer.from(`${unsupportedText.slice(0, rootClose)} (no_connect (at 1 2) (uuid "00000000-0000-4000-8000-000000000000")) ${unsupportedText.slice(rootClose)}`);
     let unsupportedRefused = false;
     try { packageAdapter.importKiCadSchematic(unsupportedNative.toString('utf8')); } catch (error) { unsupportedRefused = /no_connect/.test(error.message); }
     check('packaged adapter refuses unsupported native electrical constructs without changing source', unsupportedRefused && (await readFile(roundtripSchematic)).equals(nativeOriginal), `no_connect refused=${unsupportedRefused}; source SHA-256=${packageAdapter.digest(await readFile(roundtripSchematic))}`);
