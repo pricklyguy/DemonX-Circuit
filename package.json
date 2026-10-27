@@ -12,6 +12,7 @@
     "test:schematic-model": "npm run build && node prototype/schematic-model-smoke.mjs",
     "test:native-roundtrip": "npm run build && node prototype/native-roundtrip-smoke.mjs",
     "test:mcp": "npm run build && node prototype/mcp-sdk-smoke.mjs",
+    "verify:owner-schematic": "npm run build && node prototype/verify-owner-schematic.mjs",
     "postinstall": "node node_modules/electron/install.js",
     "start": "npm run build && npm run postinstall && electron .",
     "capture": "npm run build && npm run postinstall && electron . --capture-screenshot"
