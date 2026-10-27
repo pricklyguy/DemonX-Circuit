@@ -178,7 +178,23 @@ async function wireCanvasPoint(index) {
   return point;
 }
 async function wireBetweenCanvasPoint(referenceA, numberA, referenceB, numberB) {
-  const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),id=(r,n)=>{const c=m.components.find(v=>v.reference===r);return c&&'pin:'+c.id+':'+n;},aId=id(${JSON.stringify(referenceA)},${JSON.stringify(numberA)}),bId=id(${JSON.stringify(referenceB)},${JSON.stringify(numberB)}),i=m.wires.findIndex(w=>(w.fromNodeId===aId&&w.toNodeId===bId)||(w.fromNodeId===bId&&w.toNodeId===aId)); if(i<0) throw new Error('No imported wire connects the requested pins.'); const w=m.wires[i],node=id=>{const q=/^pin:([^:]+):(.+)$/.exec(id),c=m.components.find(v=>v.id===q?.[1]),p=c?.pins.find(v=>v.number===q?.[2]);if(c&&p){let x=p.x,y=p.y;for(let n=0;n<c.rotation/90;n++)[x,y]=[-y,x];return{x:c.x+x,y:c.y+y};}const j=m.junctions.find(v=>v.id===id);return j?{x:j.x,y:j.y}:null;},a=node(w.fromNodeId),b=node(w.toNodeId),mid=Math.round((a.x+b.x)/2);let wx,wy;if(a.y!==b.y){wx=mid;wy=(a.y+b.y)/2;}else{wx=(a.x+b.x)/2;wy=a.y;}const e=document.getElementById('schematic-stage');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),s=.85,x=r.left+e.clientWidth/2-50*20*s+wx*20*s,y=r.top+e.clientHeight/2-40*20*s+wy*20*s;return{x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight};})()`);
+  const model = await evaluate('window.circuit.loadSchematicModel()');
+  const component = reference => model.components.find(item => item.reference === reference);
+  const from = `pin:${component(referenceA)?.id}:${numberA}`;
+  const to = `pin:${component(referenceB)?.id}:${numberB}`;
+  const wire = model.wires.find(item => (item.fromNodeId === from && item.toNodeId === to) || (item.fromNodeId === to && item.toNodeId === from));
+  if (!wire) throw new Error(`No model wire connects ${referenceA}.${numberA} and ${referenceB}.${numberB}.`);
+  const routed = packageModel.routeSchematicWires(model);
+  if (routed.errors.length) throw new Error(`Cannot locate a safe displayed route for ${referenceA}.${numberA}–${referenceB}.${numberB}: ${routed.errors.join(' ')}`);
+  const route = routed.routes.find(item => item.wireId === wire.id);
+  if (!route) throw new Error(`The renderer did not create a display route for wire ${wire.id}.`);
+  const segments = route.points.slice(1).map((end, index) => {
+    const start = route.points[index];
+    return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2, length: Math.abs(end.x - start.x) + Math.abs(end.y - start.y) };
+  }).sort((a, b) => b.length - a.length);
+  const midpoint = segments[0];
+  if (!midpoint || midpoint.length === 0) throw new Error(`Display route ${wire.id} has no clickable segment.`);
+  const point = await evaluate(`(() => { const e=document.getElementById('schematic-stage');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),s=.85,x=r.left+e.clientWidth/2-50*20*s+${midpoint.x}*20*s,y=r.top+e.clientHeight/2-40*20*s+${midpoint.y}*20*s;return{x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight,wireId:${JSON.stringify(wire.id)},world:{x:${midpoint.x},y:${midpoint.y}}};})()`);
   if (!point?.insideViewport) throw new Error(`Schematic canvas or wire ${referenceA}.${numberA}–${referenceB}.${numberB} is outside the packaged viewport: ${JSON.stringify(point)}`);
   return point;
 }
