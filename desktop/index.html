@@ -26,6 +26,7 @@
           <button id="new-project" class="button primary">＋ New Project</button>
         </div>
       </header>
+      <div id="dev-reload-banner" class="dev-reload-banner hidden" role="status"><span>A development update is ready. Reload when convenient; unsaved schematic edits block reload.</span><button id="dev-reload-now" class="button secondary" type="button">Reload development build</button></div>
 
       <section id="welcome" class="welcome">
         <div class="welcome-copy">
@@ -113,7 +114,7 @@
           <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Component details</h2><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component to see its details.</div></div><div class="schematic-engine-note"><strong id="schematic-sync-state">Edits are staged before KiCad changes.</strong><p>Save creates a recoverable DemonX revision. Validate &amp; Stage exports a separate native candidate, compares original and candidate netlists, and runs KiCad ERC. The original stays unchanged until you review and explicitly approve commit. Edits outside the supported symbol/wire/label subset are refused.</p><p id="schematic-source-hash" class="muted">Native revision hash: checking…</p></div></aside>
         </div>
       </section>
-      <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
+      <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately <span id="dev-build-id"></span></span><span>AI suggestions are not engineering verification.</span></footer>
     </main>
   </div>
   <dialog id="settings-dialog" class="modal settings-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2></div><button class="close-button" aria-label="Close">×</button></div><section class="setting-row"><div><strong>Appearance</strong><p>Choose the theme for this computer.</p></div><button id="settings-theme-toggle" class="button secondary" type="button">Toggle theme</button></section><section class="setting-row tool-settings"><div><strong>Native tools</strong><p id="settings-tools">Checking installed tools…</p><p class="setting-note">KiCad 10.0.7 is the verified version. Circuit does not install tools or modify system settings.</p></div><div class="setting-actions"><button id="select-kicad" class="button secondary" type="button">Select KiCad folder…</button><button id="select-esphome" class="button secondary" type="button">Select ESPHome CLI…</button></div></section><section class="setting-row"><div><strong>Brand assets</strong><p>Official DemonX Circuit artwork. Other DemonX Suite artwork remains available in the repository assets folder.</p></div><span class="tag">LOCAL</span></section><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>

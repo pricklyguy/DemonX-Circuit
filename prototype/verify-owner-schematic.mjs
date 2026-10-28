@@ -17,33 +17,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const model = require(join(root, 'desktop', 'dist', 'schematic-model.js'));
 const adapter = require(join(root, 'desktop', 'kicad-schematic-adapter.cjs'));
+const cliArgs = require(join(root, 'prototype', 'owner-schematic-cli-args.cjs'));
 const EXPECTED_NETS = [['D1.1', 'R1.1'], ['D1.2', 'J1.2'], ['J1.1', 'R1.2']];
 
 function sortGroups(groups) {
   return groups.map(group => [...group].sort()).sort((a, b) => a.join('|').localeCompare(b.join('|')));
-}
-
-function findKiCadCli(explicitPath) {
-  const candidates = explicitPath ? [resolve(explicitPath)] : process.platform === 'win32'
-    ? ['ProgramFiles', 'ProgramFiles(x86)'].filter(key => process.env[key]).map(key => join(process.env[key], 'KiCad', '10.0', 'bin', 'kicad-cli.exe'))
-    : ['/usr/bin/kicad-cli', '/usr/local/bin/kicad-cli'];
-  return candidates.find(candidate => existsSync(candidate)) || null;
-}
-
-function parseArgs(args) {
-  let input = null;
-  let reportPath = null;
-  let cliPath = null;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--report') reportPath = args[++i];
-    else if (arg === '--kicad-cli') cliPath = args[++i];
-    else if (arg === '--help' || arg === '-h') return { help: true };
-    else if (!input) input = arg;
-    else throw new Error(`Unexpected argument: ${arg}`);
-  }
-  if (!input || (reportPath === undefined) || (cliPath === undefined)) throw new Error('Usage: node prototype/verify-owner-schematic.mjs <owner-file.kicad_sch> [--kicad-cli <path>] [--report <report.json>]');
-  return { input: resolve(input), reportPath: reportPath ? resolve(reportPath) : null, cliPath };
 }
 
 function printHelp() {
@@ -53,7 +31,7 @@ function printHelp() {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = cliArgs.parseArgs(process.argv.slice(2));
   if (args.help) { printHelp(); return 0; }
   const sourcePath = await realpath(args.input);
   const originalBytes = await readFile(sourcePath);
@@ -100,42 +78,54 @@ async function main() {
   report.classifications.visualRoutingFailure = routing.errors.length === 0 ? 'PASS: routed display geometry has no cross-net contacts detected by the router' : 'FAIL: display routing reports geometry collisions or cannot find a route';
   report.designRevision = { sourceSha256: sourceHash, nativeSync: imported.nativeSync || null, validationBoundToSourceHash: sourceHash };
 
-  const cliPath = findKiCadCli(args.cliPath);
-  if (!cliPath) {
-    report.checks.nativeKiCad = { result: 'NOT TESTED', reason: 'KiCad CLI 10.0.7 was not found in the standard install location; pass --kicad-cli to select it explicitly.' };
-    report.classifications.nativeKiCadErcError = 'NOT TESTED: KiCad CLI unavailable';
+  const cliSelection = cliArgs.selectCli(args.cliPath);
+  if (cliSelection.status !== 'FOUND') {
+    const invalid = cliSelection.status === 'INVALID_CLI_PATH';
+    report.checks.nativeKiCad = { result: invalid ? 'FAIL' : 'NOT TESTED', status: cliSelection.status, explicitPath: args.cliPath, reason: cliSelection.reason };
+    report.classifications.nativeKiCadErcError = `${invalid ? 'FAIL' : 'NOT TESTED'}: ${cliSelection.status}: ${cliSelection.reason}`;
   } else {
+    const cliPath = cliSelection.path;
     const temp = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), 'demonx-owner-schematic-check-')));
     const netlistPath = join(temp, 'native.net');
     const ercPath = join(temp, 'native-erc.rpt');
     try {
       const resolvedCli = await realpath(cliPath);
-      const version = await execFile(resolvedCli, ['version'], { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+      let version;
+      try {
+        version = await execFile(resolvedCli, ['version'], { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+      } catch (error) {
+        throw Object.assign(error, { nativeStage: 'VERSION_PROBE_FAILED', nativeCommand: [resolvedCli, 'version'] });
+      }
       const versionText = (version.stdout || version.stderr).trim();
       report.checks.nativeKiCad = { cli: resolvedCli, version: versionText };
       if (!/\b10\.0\.7\b/.test(versionText)) {
         report.checks.nativeKiCad.result = 'NOT TESTED';
+        report.checks.nativeKiCad.status = 'INCORRECT_VERSION';
         report.checks.nativeKiCad.reason = 'This verifier is qualified for KiCad CLI 10.0.7 only.';
         report.checks.nativeNetlist = { result: 'NOT TESTED', reason: 'KiCad CLI version is not the qualified 10.0.7 version.' };
         report.checks.nativeSemanticAgreement = { result: 'NOT TESTED', reason: 'Native netlist was not generated.' };
         report.checks.nativeErc = { result: 'NOT TESTED', reason: 'KiCad CLI version is not the qualified 10.0.7 version.' };
         report.classifications.nativeKiCadErcError = 'NOT TESTED: KiCad CLI version mismatch';
       } else {
-      const netlistRun = await execFile(resolvedCli, ['sch', 'export', 'netlist', '--format', 'kicadxml', '--output', netlistPath, sourcePath], { windowsHide: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+      const netlistArgs = ['sch', 'export', 'netlist', '--format', 'kicadxml', '--output', netlistPath, sourcePath];
+      let netlistRun;
+      try { netlistRun = await execFile(resolvedCli, netlistArgs, { windowsHide: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024 }); }
+      catch (error) { throw Object.assign(error, { nativeStage: 'NETLIST_EXECUTION_FAILED', nativeCommand: [resolvedCli, ...netlistArgs] }); }
       const nativeGroups = sortGroups(adapter.parseKicadNetlist(await readFile(netlistPath, 'utf8')));
       const nativeMatches = JSON.stringify(nativeGroups) === JSON.stringify(sortGroups(EXPECTED_NETS));
       report.checks.nativeNetlist = { result: nativeMatches ? 'PASS' : 'FAIL', exitCode: 0, groups: nativeGroups, expected: sortGroups(EXPECTED_NETS), stdout: netlistRun.stdout.trim(), stderr: netlistRun.stderr.trim() };
       report.checks.nativeSemanticAgreement = { result: JSON.stringify(nativeGroups) === JSON.stringify(semanticNets) ? 'PASS' : 'FAIL', nativeGroups, semanticGroups: semanticNets };
-      const ercRun = await execFile(resolvedCli, ['sch', 'erc', '--severity-all', '--exit-code-violations', '--output', ercPath, sourcePath], { windowsHide: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024 }).catch(error => ({ exitCode: error.code ?? 1, stdout: error.stdout || '', stderr: error.stderr || error.message }));
+      const ercArgs = ['sch', 'erc', '--severity-all', '--exit-code-violations', '--output', ercPath, sourcePath];
+      const ercRun = await execFile(resolvedCli, ercArgs, { windowsHide: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024 }).catch(error => ({ exitCode: error.code ?? 1, stdout: error.stdout || '', stderr: error.stderr || error.message, processError: true }));
       const ercReport = existsSync(ercPath) ? await readFile(ercPath, 'utf8') : '';
       const ercExitCode = ercRun.exitCode ?? 0;
-      report.checks.nativeErc = { result: ercExitCode === 0 ? 'PASS' : 'FAIL', exitCode: ercExitCode, report: ercReport, stdout: ercRun.stdout.trim(), stderr: ercRun.stderr.trim() };
-      report.classifications.nativeKiCadErcError = ercExitCode === 0 ? 'PASS: KiCad ERC exit code 0 on the exact source SHA-256' : 'FAIL: KiCad ERC returned a nonzero exit code on the exact source SHA-256';
+      report.checks.nativeErc = { result: ercExitCode === 0 ? 'PASS' : 'FAIL', status: ercRun.processError ? 'NATIVE_EXECUTION_FAILED' : 'ERC_VIOLATIONS_OR_FAILURE', command: [resolvedCli, ...ercArgs], exitCode: ercExitCode, report: ercReport, stdout: ercRun.stdout.trim(), stderr: ercRun.stderr.trim() };
+      report.classifications.nativeKiCadErcError = ercExitCode === 0 ? 'PASS: KiCad ERC exit code 0 on the exact source SHA-256' : ercRun.processError ? `FAIL: native ERC execution failed (exit ${ercExitCode}) on the exact source SHA-256` : `FAIL: KiCad ERC returned exit code ${ercExitCode} on the exact source SHA-256`;
       report.checks.nativeKiCad.result = report.checks.nativeNetlist.result === 'PASS' && report.checks.nativeSemanticAgreement.result === 'PASS' && report.checks.nativeErc.result === 'PASS' ? 'PASS' : 'FAIL';
       }
     } catch (error) {
-      report.checks.nativeKiCad = { ...(report.checks.nativeKiCad || {}), result: 'FAIL', error: error.message };
-      report.classifications.nativeKiCadErcError = `FAIL/INCONCLUSIVE: native check execution failed: ${error.message}`;
+      report.checks.nativeKiCad = { ...(report.checks.nativeKiCad || {}), result: error.nativeStage === 'VERSION_PROBE_FAILED' ? 'FAIL' : 'FAIL', status: error.nativeStage || 'NATIVE_EXECUTION_FAILED', command: error.nativeCommand || null, exitCode: typeof error.code === 'number' ? error.code : null, stdout: error.stdout || '', stderr: error.stderr || '', error: error.message };
+      report.classifications.nativeKiCadErcError = `FAIL: ${error.nativeStage || 'NATIVE_EXECUTION_FAILED'}: ${error.message}`;
     } finally {
       const fs = await import('node:fs/promises');
       await fs.rm(temp, { recursive: true, force: true });

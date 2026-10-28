@@ -25,6 +25,14 @@ let showPinNumbers = false;
 let showPinNames = false;
 let toolbarInstalled = false;
 let globalKeysInstalled = false;
+let savedSnapshot = '';
+
+function updateDirtyState() {
+  if (!documentModel) return;
+  const dirty = JSON.stringify(documentModel) !== savedSnapshot;
+  document.body.dataset.schematicDirty = String(dirty);
+  window.dispatchEvent(new CustomEvent('circuit:schematic-dirty', { detail: dirty }));
+}
 
 const colors = () => {
   const css = getComputedStyle(document.body);
@@ -193,6 +201,7 @@ function draw() {
   for (const component of documentModel.components) drawComponent(component);
   layer.batchDraw();
   updateHistoryButtons();
+  updateDirtyState();
 }
 function setMode(next: 'select' | 'wire') {
   mode = next; wireStart = null;
@@ -307,7 +316,7 @@ function installToolbar() {
     if (!documentModel || !saveModel) return;
     const issues = [...validateSchematic(documentModel), ...findSupplyShorts(documentModel), ...routeSchematicWires(documentModel).errors];
     if (issues.length) { setStatus(issues.join(' '), true); return; }
-    try { const revision = await saveModel(cloneDocument(documentModel)); setStatus(`Saved local DemonX revision ${revision}. Native KiCad checks do not include these edits until a candidate is validated and committed.`); }
+    try { const revision = await saveModel(cloneDocument(documentModel)); savedSnapshot = JSON.stringify(documentModel); updateDirtyState(); setStatus(`Saved local DemonX revision ${revision}. Native KiCad checks do not include these edits until a candidate is validated and committed.`); }
     catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
   });
   document.getElementById('schematic-stage-native')?.addEventListener('click', async () => {
@@ -368,7 +377,7 @@ export function mount(initialDocument: SchematicDocument, save: SaveSchematic, s
   if (!container) throw new Error('Schematic workspace is missing its canvas.');
   const issues = validateSchematic(initialDocument);
   if (issues.length) throw new Error(`This schematic model cannot be opened safely: ${issues.join(' ')}`);
-  documentModel = cloneDocument(initialDocument); saveModel = save; stageCandidate = stageCandidateAction; history = []; redoHistory = []; selectedComponentId = null; selectedWireId = null; wireStart = null; mode = 'select';
+  documentModel = cloneDocument(initialDocument); savedSnapshot = JSON.stringify(documentModel); saveModel = save; stageCandidate = stageCandidateAction; history = []; redoHistory = []; selectedComponentId = null; selectedWireId = null; wireStart = null; mode = 'select';
   if (stage) stage.destroy();
   stage = new Konva.Stage({ container: container as HTMLDivElement, width: container.clientWidth, height: container.clientHeight });
   stage.scale({ x: 0.85, y: 0.85 });

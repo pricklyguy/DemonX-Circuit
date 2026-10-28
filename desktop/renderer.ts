@@ -212,9 +212,32 @@ $('select-esphome').addEventListener('click', async () => {
 window.circuit.onProjectChanged(updateProject);
 updateProject(null);
 async function initialize() {
-  const [theme, env] = await Promise.all([window.circuit.getTheme(), window.circuit.getNativeTools()]);
+  const [theme, env] = await Promise.all([window.circuit.getTheme(), window.circuit.getEnvironment()]);
   document.body.dataset.theme = theme;
   renderNativeTools(env);
+  if (env.development) {
+    const treeState = env.development.tree === 'clean' ? '' : ' + WORKTREE CHANGES';
+    $('dev-build-id').textContent = ` · DEV ${env.development.branch}@${env.development.commit.slice(0, 8)}${treeState} · log: ${env.development.logPath || 'console'}`;
+  }
   await refreshRecentProjects();
 }
+let devUpdatePending = false;
+window.circuit.onDevRendererUpdate(() => {
+  devUpdatePending = true;
+  const banner = $('dev-reload-banner');
+  if (document.body.dataset.schematicDirty === 'true' || !$('schematic-workspace').classList.contains('hidden')) banner.classList.remove('hidden');
+  else window.setTimeout(() => { if (devUpdatePending && document.body.dataset.schematicDirty !== 'true') window.location.reload(); }, 350);
+});
+$('dev-reload-now').addEventListener('click', () => {
+  if (document.body.dataset.schematicDirty === 'true') {
+    showResult({ status: 'NOT TESTED', title: 'Save before reloading', message: 'The schematic has unsaved edits. Save a DemonX revision first; the development reload will remain deferred.' });
+    return;
+  }
+  window.location.reload();
+});
+window.addEventListener('circuit:schematic-dirty', event => {
+  const dirty = (event as CustomEvent<boolean>).detail;
+  document.body.dataset.schematicDirty = String(dirty);
+  if (dirty && devUpdatePending) $('dev-reload-banner').classList.remove('hidden');
+});
 void initialize().catch(error => { $('engine-status').textContent = 'Tool status unavailable'; showResult({ status: 'FAIL', title: 'Startup', message: error instanceof Error ? error.message : String(error) }); });

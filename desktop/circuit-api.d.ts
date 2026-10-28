@@ -46,6 +46,7 @@ interface CircuitApi {
   setTheme(theme: "dark" | "light"): Promise<void>;
   getTheme(): Promise<"dark" | "light">;
   onProjectChanged(callback: (project: ProjectSummary | null) => void): void;
+  onDevRendererUpdate(callback: (changedFile: string) => void): void;
 }
 
 interface NativeToolsSummary {
@@ -63,6 +64,7 @@ interface NativeToolsSummary {
   esphomeVersion: string | null;
   esphomeError: string | null;
   version: string;
+  development?: { branch: string; commit: string; tree: string; logPath: string | null } | null;
 }
 
 interface Window { circuit: CircuitApi; }

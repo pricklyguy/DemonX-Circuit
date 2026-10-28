@@ -9,6 +9,12 @@ const os = require('node:os');
 const { findSupplyShorts, routeSchematicWires, validateSchematic } = require('./dist/schematic-model.js');
 const schematicAdapter = require('./kicad-schematic-adapter.cjs');
 
+// A development launch gets its own user-data directory, so testing the local
+// build cannot overwrite the normal preview's preferences or recent projects.
+if (process.env.DEMONX_CIRCUIT_DEV_USER_DATA) {
+  app.setPath('userData', path.resolve(process.env.DEMONX_CIRCUIT_DEV_USER_DATA));
+}
+
 const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
 if (acceptanceRoot) {
   const userData = process.env.DEMONX_CIRCUIT_USER_DATA;
@@ -253,7 +259,15 @@ function register(channel, handler) {
 }
 
 register('env:get', async () => {
-  return getNativeTools();
+  return {
+    ...await getNativeTools(),
+    development: process.env.DEMONX_CIRCUIT_DEV_MODE === '1' ? {
+      branch: process.env.DEMONX_CIRCUIT_DEV_BRANCH || 'unknown',
+      commit: process.env.DEMONX_CIRCUIT_DEV_COMMIT || 'unknown',
+      tree: process.env.DEMONX_CIRCUIT_DEV_TREE || 'unknown',
+      logPath: process.env.DEMONX_CIRCUIT_DEV_LOG || null
+    } : null
+  };
 });
 register('native-tools:select-kicad', async () => {
   const picked = await dialog.showOpenDialog(win, { title: 'Select KiCad 10.0.7 installation folder', properties: ['openDirectory'] });
@@ -723,6 +737,23 @@ async function createWindow() {
   win.webContents.on('preload-error', (_event, preload, error) => console.error('[Circuit preload error]', preload, error));
   win.webContents.on('did-fail-load', (_event, code, description, url) => console.error('[Circuit load error]', code, description, url));
   win.webContents.on('render-process-gone', (_event, details) => console.error('[Circuit renderer process gone]', details));
+  if (process.env.DEMONX_CIRCUIT_DEV_MODE === '1') {
+    let reloadTimer;
+    const fsSync = require('node:fs');
+    const watchedRoot = new Set(['style.css', 'index.html']);
+    const onChange = (watched, _event, fileName) => {
+      if (!fileName || !watched.has(String(fileName))) return;
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        if (!win || win.isDestroyed()) return;
+        console.info(`[Circuit dev] changed ${String(fileName)}; requesting safe renderer reload`);
+        win.webContents.send('dev:renderer-updated', String(fileName));
+      }, 250);
+    };
+    const sourceWatcher = fsSync.watch(__dirname, onChange.bind(null, watchedRoot));
+    const bundleWatcher = fsSync.watch(path.join(__dirname, 'dist'), onChange.bind(null, new Set(['renderer.js', 'preload.js'])));
+    win.once('closed', () => { sourceWatcher.close(); bundleWatcher.close(); clearTimeout(reloadTimer); });
+  }
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   await win.loadFile(path.join(__dirname, 'index.html'));

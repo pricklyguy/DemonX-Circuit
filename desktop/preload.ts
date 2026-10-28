@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld("circuit", {
   saveEsphome: (yaml: string, replaceApproved = false, destination?: string) => ipcRenderer.invoke("esphome:save", yaml, replaceApproved, destination),
   setTheme: (theme: "dark" | "light") => ipcRenderer.invoke("theme:set", theme),
   getTheme: () => ipcRenderer.invoke("theme:get"),
-  onProjectChanged: (callback: (project: ProjectSummary | null) => void) => ipcRenderer.on("project:changed", (_event: unknown, project: ProjectSummary | null) => callback(project))
+  onProjectChanged: (callback: (project: ProjectSummary | null) => void) => ipcRenderer.on("project:changed", (_event: unknown, project: ProjectSummary | null) => callback(project)),
+  onDevRendererUpdate: (callback: (changedFile: string) => void) => ipcRenderer.on("dev:renderer-updated", (_event: unknown, changedFile: string) => callback(changedFile))
 } satisfies CircuitApi);
