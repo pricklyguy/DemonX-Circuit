@@ -102,7 +102,11 @@ function cdp(method, params = {}, timeout = 10000) {
 }
 async function evaluate(expression, timeout = 10000) {
   const response = await cdp('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeout);
-  if (response.exceptionDetails) throw new Error(response.exceptionDetails.text || 'Renderer evaluation failed');
+  if (response.exceptionDetails) {
+    const details = response.exceptionDetails;
+    const message = details.exception?.description || details.exception?.value || details.text || 'Renderer evaluation failed';
+    throw new Error(message);
+  }
   return response.result?.value;
 }
 async function waitUntil(expression, description, timeout = 10000) {
@@ -369,12 +373,12 @@ try {
     await clickSelector('.component-choice');
     check('choosing a component enters cursor placement without modifying the project', await evaluate(`document.querySelector('#schematic-add')?.classList.contains('active') && document.querySelectorAll('#schematic-stage canvas').length > 0 && document.querySelector('#schematic-stage canvas')?.getAttribute('width') !== '0'`) && (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, `mode=${await evaluate(`document.getElementById('schematic-status').textContent`)}`);
     await pressKey('Escape', 'Escape', 27);
-    const cancelledPlacement = await evaluate(`({active:document.querySelector('#schematic-add')?.classList.contains('active'),count:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent})`);
+    const cancelledPlacement = await evaluate(`(async()=>({active:document.querySelector('#schematic-add')?.classList.contains('active'),count:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent}))()`);
     check('Escape cancels pending placement without changing the schematic', !cancelledPlacement.active && cancelledPlacement.count === 3 && /cancel/i.test(cancelledPlacement.status), JSON.stringify(cancelledPlacement));
     await click('schematic-add'); await waitUntil(`document.getElementById('component-picker').open`, 'reopen searchable component dialog after cancel');
     await replaceTextInput('#component-search', 'Resistor'); await clickSelector('.component-choice');
     await click('schematic-rotate');
-    const prePlacementPreview = await evaluate(`({mode:document.getElementById('schematic-add').classList.contains('active'),modelCount:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent})`);
+    const prePlacementPreview = await evaluate(`(async()=>({mode:document.getElementById('schematic-add').classList.contains('active'),modelCount:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent}))()`);
     check('Rotate turns the ghosted resistor before placement', prePlacementPreview.mode && prePlacementPreview.modelCount === 3 && /90°/.test(prePlacementPreview.status), JSON.stringify(prePlacementPreview));
     const resistorDrop = await modelCanvasPoint(70, 50); await clickCanvasAt(resistorDrop.x, resistorDrop.y);
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
@@ -443,7 +447,7 @@ try {
     await click('schematic-wire');
     const cancelPinPoint = await pinCanvasPoint('J1', '1'); await clickCanvasAt(cancelPinPoint.x, cancelPinPoint.y);
     await pressKey('Escape', 'Escape', 27);
-    const cancelledWire = await evaluate(`({wires:(await window.circuit.loadSchematicModel()).wires.length,active:document.getElementById('schematic-select').classList.contains('active'),status:document.getElementById('schematic-status').textContent})`);
+    const cancelledWire = await evaluate(`(async()=>({wires:(await window.circuit.loadSchematicModel()).wires.length,active:document.getElementById('schematic-select').classList.contains('active'),status:document.getElementById('schematic-status').textContent}))()`);
     check('Escape cancels a pending wire start without changing connectivity', cancelledWire.wires === 3 && cancelledWire.active && /cancel/i.test(cancelledWire.status), JSON.stringify(cancelledWire));
     await click('schematic-wire');
     const wireTargets = await evaluate(`(async() => {
