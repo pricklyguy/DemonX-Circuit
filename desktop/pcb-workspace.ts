@@ -1,4 +1,5 @@
 // Native PCB is authoritative; this view edits only footprint placement in new revisions.
+import { evaluateAssembly } from './assembly-stackup';
 export function mountBoardWorkspace() {
  const el=(id:string)=>document.getElementById(id)!;
  const panel=el('pcb-workspace'); const ns='http://www.w3.org/2000/svg';
@@ -33,7 +34,8 @@ export function mountBoardWorkspace() {
    group.append(svgNode('text',{x:0,y:-1,'font-size':1.8,fill:color,'text-anchor':'middle'},f.ref));
    svg.append(group);
   }
-  svg.append(svgNode('text',{x:b.x+b.width/2,y:b.y-4,'text-anchor':'middle','font-size':2,fill:'#e9d57b'},`${b.width.toFixed(2)} × ${b.height.toFixed(2)} mm · PROVISIONAL`));
+  const outlineStatus=board.constraints.board?.fitStatus==='owner-template-fit-confirmed'?'TEMPLATE CHECKED':'PROVISIONAL';
+  svg.append(svgNode('text',{x:b.x+b.width/2,y:b.y-4,'text-anchor':'middle','font-size':2,fill:'#e9d57b'},`${b.width.toFixed(2)} × ${b.height.toFixed(2)} mm · ${outlineStatus}`));
   el('pcb-revision').textContent=`Native SHA-256 ${board.sha256.slice(0,12)} · ${board.footprints.length} items · front view; back components projected`;
   dirty();
  }
@@ -48,6 +50,15 @@ export function mountBoardWorkspace() {
   }
   el('pcb-issues').replaceChildren();for(const issue of board.issues){const p=document.createElement('p');p.textContent=issue;el('pcb-issues').append(p);}
   el('pcb-reference-note').textContent=board.constraints.description||'No registered enclosure geometry. Rectangular 2D courtyard checks only.';
+  const assembly=el('pcb-assembly');assembly.replaceChildren();
+  el('pcb-assembly-details').classList.toggle('hidden',!board.constraints.assembly);
+  if(board.constraints.assembly) {
+   const heading=document.createElement('h3');heading.textContent='Assembly depth review · mm';assembly.append(heading);
+   try {
+    const stack=evaluateAssembly(board.constraints.assembly,board.thicknessMm),p=stack.proposed;
+    for(const message of [`Reference: ${stack.datumLabel}; positive depth is behind this plane.`,`Proposed PCB front ${p.pcbFrontMm}; rear ${p.pcbRearMm}. Display pin tips ${stack.pinTipMm}.`,`Socket mouth ${p.socketMouthMm}; display PCB gap ${p.displayBoardClearanceMm}; pin insertion into body ${p.insertionMm}.`,p.contactStatus,`Button: existing rest gap ${p.existingButtonGapMm}; proposed actuator tip ${p.proposedActuatorMm} for the stated rest-gap target. Travel and stop remain unverified.`,...stack.warnings,...p.warnings]){const line=document.createElement('p');line.textContent=message;assembly.append(line);}
+   } catch(error){const line=document.createElement('p');line.textContent=`Assembly data refused: ${String(error)}`;assembly.append(line);}
+  }
   draw();
  }
  async function open(){try{el('pcb-error').textContent='';board=await window.circuit.loadBoard();populate();panel.classList.remove('hidden');panel.scrollIntoView();}catch(error){el('pcb-error').textContent=String(error);panel.classList.remove('hidden');}}

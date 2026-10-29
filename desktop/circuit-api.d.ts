@@ -79,8 +79,9 @@ interface BoardFootprint extends BoardPlacement {
  pads: Array<{number:string;type:string;x:number;y:number;width:number;height:number;drill:number;net:string}>;
 }
 interface MechanicalBoard {
+ thicknessMm:number|null;
  sha256:string; path:string; bounds:{x:number;y:number;width:number;height:number};
  edges:Array<{a:number[];b:number[]}>; footprints:BoardFootprint[]; routed:boolean;
  issues:string[];
- constraints:{description?:string;references?:Array<{label:string;x:number;y:number;width?:number;height?:number;radius?:number}>;keepouts?:Array<{label:string;x:number;y:number;width:number;height:number}>};
+ constraints:{description?:string;assembly?:import('./assembly-stackup').AssemblyInputs;board?:{fitStatus?:string};references?:Array<{label:string;x:number;y:number;width?:number;height?:number;radius?:number}>;keepouts?:Array<{label:string;x:number;y:number;width:number;height:number}>};
 }

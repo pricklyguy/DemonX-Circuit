@@ -25,6 +25,8 @@ const text=`(kicad_pcb (version 20260206) (generator "pcbnew")
   (pad "" np_thru_hole circle (at 0 0) (size 2.2 2.2) (drill 2.2) (layers "*.Cu" "*.Mask")))
  (embedded_fonts no))`;
 const b=pcb.inspect(text);assert.deepEqual(b.bounds,{x:0,y:0,width:30,height:20});
+assert.equal(b.thicknessMm,1.6);
+assert.throws(()=>pcb.inspect(text.replace('(thickness 1.6)','(thickness 0)')),/thickness must be positive/);
 const backText=text.replace('(footprint "SyntheticHole" (layer "F.Cu")','(footprint "SyntheticHole" (layer "B.Cu")').replace('(fp_circle (center 0 0) (end 2 0) (stroke (width 0.05) (type default)) (fill none) (layer "F.CrtYd"))','(fp_circle (center 0 0) (end 2 0) (stroke (width 0.05) (type default)) (fill none) (layer "B.CrtYd"))');
 assert.equal(pcb.inspect(backText).footprints.find(f=>f.ref==='H1').layer,'B.Cu');
 assert.equal(b.footprints.find(f=>f.ref==='H1').body.x1,-2);

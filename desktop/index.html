@@ -134,6 +134,7 @@
     <p id="pcb-revision"></p>
     <div class="pcb-toolbar"><label>Layer <select id="pcb-layer"><option value="all">Both, front projection</option><option value="F.Cu">Front (F.Cu)</option><option value="B.Cu">Back (B.Cu)</option></select></label><label><input type="checkbox" id="pcb-references" checked> Enclosure reference geometry</label><button id="pcb-save" class="button primary">Save new PCB revision</button></div>
     <p id="pcb-error" role="status"></p>
+    <details id="pcb-assembly-details"><summary>Assembly depth and connector engagement</summary><div id="pcb-assembly"></div></details>
     <div class="pcb-grid"><svg id="pcb-canvas" role="img" aria-label="PCB placement drawing in millimetres"></svg><div class="pcb-sidebar"><p id="pcb-reference-note"></p><h3>Placement · mm and degrees</h3><p>Green: front · Blue: back · Gold: board edge. Module envelopes have no electrical pads.</p><div class="pcb-table-scroll"><table class="pcb-table"><thead><tr><th>Item</th><th>X</th><th>Y</th><th>°</th><th>Layer</th></tr></thead><tbody id="pcb-placements"></tbody></table></div><h3>Fit diagnostics and missing measurements</h3><div id="pcb-issues"></div></div></div>
   </section>
   <script src="./dist/renderer.js"></script>

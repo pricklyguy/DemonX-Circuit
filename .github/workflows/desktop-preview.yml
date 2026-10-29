@@ -69,6 +69,9 @@ jobs:
       - name: Test immutable native PCB mechanical revisions
         run: npm run test:pcb-mechanical
 
+      - name: Test assembly depth and engagement calculations
+        run: npm run test:assembly-stackup
+
       - name: Test constrained native schematic import and export
         env:
           DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke

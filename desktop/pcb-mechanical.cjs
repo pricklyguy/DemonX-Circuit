@@ -62,7 +62,10 @@ function inspect(text) {
   return {ref:val(ref,2),value:val(value,2),library:val(f),x:num(at),y:num(at,2),rotation:at.items.length>3?num(at,3):0,layer:val(kid(f,'layer')),body,pads};
  });
  if(footprints.some(f=>!f.ref)||new Set(footprints.map(f=>f.ref)).size!==footprints.length)throw new Error('PCB requires unique references.');
- return {sha256:hash(text),bounds,edges,footprints,routed:['segment','arc','via','zone'].some(name=>kids(root,name).length>0)};
+ const general=kid(root,'general'),thicknessNode=general&&kid(general,'thickness');
+ const thicknessMm=thicknessNode?num(thicknessNode):null;
+ if(thicknessMm!=null&&thicknessMm<=0)throw new Error('PCB thickness must be positive.');
+ return {sha256:hash(text),bounds,edges,footprints,thicknessMm,routed:['segment','arc','via','zone'].some(name=>kids(root,name).length>0)};
 }
 function extent(f) {
  if(!f.body)return null;
@@ -71,7 +74,8 @@ function extent(f) {
  return {x:Math.min(...pts.map(p=>p[0])),y:Math.min(...pts.map(p=>p[1])),right:Math.max(...pts.map(p=>p[0])),bottom:Math.max(...pts.map(p=>p[1]))};
 }
 function diagnostics(board,constraints={}) {
- const issues=['PROVISIONAL: board outline and mounting locations require owner measurement.','3D NOT VERIFIED: reference projections do not test depth, snap clips, connector mating, or removal paths.'];
+ const outline=constraints.board?.fitStatus==='owner-template-fit-confirmed'?'OWNER TEMPLATE CHECK: nominal outline and display/button centers confirmed; mounting and assembled depth remain unverified.':'PROVISIONAL: board outline and mounting locations require owner measurement.';
+ const issues=[outline,'3D NOT VERIFIED: reference projections do not test depth, snap clips, connector mating, or removal paths.'];
  const b=board.bounds;
  for(const f of board.footprints) {
   const e=extent(f);

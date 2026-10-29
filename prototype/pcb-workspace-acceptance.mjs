@@ -27,12 +27,22 @@ try {
  await evaluate("document.getElementById('open-circuit-pcb').click()");await until("!document.getElementById('pcb-workspace').classList.contains('hidden') && document.getElementById('pcb-canvas').children.length>5");
  await capture('board-workspace.png');
  const baseline=await evaluate('window.circuit.loadBoard()');
+ if(baseline.constraints.assembly) {
+  await evaluate("document.getElementById('pcb-assembly-details').open=true");
+  const content=await evaluate("document.getElementById('pcb-assembly').textContent");
+  assert.ok(content.includes(baseline.constraints.assembly.datumLabel));
+  assert.match(content,/UNVERIFIED/,'unknown contact geometry must remain explicit in the real renderer');
+  await capture('assembly-depth-review.png');
+  await evaluate("document.getElementById('pcb-assembly-details').open=false");
+  report.checks.push('PASS: measured assembly inputs render with unknown contact and actuation data kept explicit');
+ }
  await evaluate("(()=>{const i=document.querySelector('input[aria-label=\"R1 x\"]');i.value='112.5';i.dispatchEvent(new Event('change'));})()");assert.equal(await evaluate('document.body.dataset.pcbDirty'), 'true');
  await evaluate("document.getElementById('open-project').click()");assert.equal(await evaluate('document.body.dataset.pcbDirty'),'true');report.checks.push('PASS: unsaved placement prevents project switch');
  await evaluate("document.getElementById('pcb-save').click()");await until("document.getElementById('pcb-error').textContent.startsWith('Saved a new')");
  const saved=await evaluate('window.circuit.loadBoard()');assert.notEqual(saved.sha256,baseline.sha256);assert.equal(saved.footprints.find(f=>f.ref==='R1').x,112.5);assert.equal(await evaluate('document.body.dataset.pcbDirty'),'false');
  await evaluate("document.getElementById('pcb-close').click()");await evaluate("document.getElementById('open-project').click()");await until("document.getElementById('project-name').textContent.includes('Coffee Maker')");
  const reopened=await evaluate('window.circuit.loadBoard()');assert.equal(reopened.sha256,saved.sha256);report.checks.push('PASS: edited native PCB save/reopen preserves exact revision hash and position');
+ if(baseline.constraints.assembly)assert.deepEqual(reopened.constraints.assembly,baseline.constraints.assembly);
  await evaluate("document.getElementById('open-circuit-pcb').click()");await until("!document.getElementById('pcb-workspace').classList.contains('hidden')");
  await capture('board-reopened.png');
  await evaluate("(()=>{const s=document.getElementById('pcb-layer');s.value='B.Cu';s.dispatchEvent(new Event('change'));})()");await capture('board-back-layer.png');report.checks.push('PASS: back layer filter rendered');
