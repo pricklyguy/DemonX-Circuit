@@ -8,6 +8,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { findSupplyShorts, routeSchematicWires, validateSchematic } = require('./dist/schematic-model.js');
 const schematicAdapter = require('./kicad-schematic-adapter.cjs');
+const pcbMechanical = require('./pcb-mechanical.cjs');
 
 // A development launch gets its own user-data directory, so testing the local
 // build cannot overwrite the normal preview's preferences or recent projects.
@@ -239,7 +240,8 @@ async function summarize(root) {
     nativeStatus: `${manifest.native?.status || 'No native status recorded.'}${missingNative.length ? ` Missing from this project folder: ${missingNative.join(', ')}.` : ''}`, components, libraries,
     nativeSyncStatus: sync.status, nativeSchematicSha256: sync.nativeSha256, editorRevision: sync.editorRevision, nativeSyncReason: sync.reason,
     capabilities: { esphome: manifest.firmware?.target === 'esphome' && !!manifest.hardware?.controller?.esphomeVariant && !!manifest.hardware?.pinMap },
-    files: { schematic, pcb } };
+    manufacturingBlocked: manifest.manufacturing?.status === 'blocked-mechanical-review',
+    files: { schematic, pcb: pcb ? await pcbMechanical.latest(root, pcb) : undefined } };
 }
 async function selectProject() {
   const picked = await dialog.showOpenDialog(win, { title: 'Open DemonX Circuit Project', properties: ['openDirectory'] });
@@ -257,6 +259,31 @@ function register(channel, handler) {
     return handler(...args);
   });
 }
+
+async function boardWorkspace() {
+ const project=ensureProject();
+ if(!project.files.pcb) throw new Error('This project has no native PCB.');
+ const file=await pcbMechanical.latest(project.root, project.files.pcb);
+ const board=pcbMechanical.inspect(await fs.readFile(file,'utf8'));
+ let constraints={};
+ try { const raw=await fs.readFile(safeInside(project.root,'mechanical/constraints.json'),'utf8'); if(raw.length>2*1024*1024)throw new Error('Mechanical metadata too large.');constraints=JSON.parse(raw); }
+ catch(error){if(error.code!=='ENOENT')throw error;}
+ return {...board,path:file,constraints,issues:pcbMechanical.diagnostics(board,constraints)};
+}
+register('pcb:load', boardWorkspace);
+let pcbSaveBusy=false;
+register('pcb:save',async (expectedSha,placements)=>{
+ if(pcbSaveBusy)throw new Error('A PCB revision save is already running.');
+ pcbSaveBusy=true;
+ try {
+  const project=ensureProject();
+  if(!project.files.pcb)throw new Error('No PCB open.');
+  await pcbMechanical.save(project.root,project.files.pcb,expectedSha,placements);
+  if (activeProject?.root !== project.root) throw new Error('Revision saved to the original project; the active project changed during save. Reopen it to inspect the saved revision.');
+  activeProject=await summarize(project.root);
+  return boardWorkspace();
+ } finally {pcbSaveBusy=false;}
+});
 
 register('env:get', async () => {
   return {
@@ -634,6 +661,8 @@ register('circuit:check', async () => {
 });
 register('manufacturing:prepare', async () => {
   const project = ensureProject();
+  const manifest = JSON.parse(await fs.readFile(path.join(project.root, 'project.json'), 'utf8'));
+  if (manifest.manufacturing?.status === 'blocked-mechanical-review') return result('FAIL', 'Fabrication blocked', 'Mechanical review project: no manufacturing files may be generated. Owner measurements and a later design milestone are required.');
   if (!project.files.pcb) return result('NOT TESTED', 'Prepare Manufacturing Files', 'This project has no native PCB file.');
   const cli = (await getNativeTools()).kicadCli;
   if (!cli) return result('NOT TESTED', 'Prepare Manufacturing Files', 'KiCad CLI was not found. Install KiCad 10.0.7 separately.');
@@ -757,6 +786,11 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   await win.loadFile(path.join(__dirname, 'index.html'));
+  if (process.env.DEMONX_CIRCUIT_DEV_MODE === '1' && process.env.DEMONX_CIRCUIT_DEV_PROJECT) {
+    activeProject = await summarize(path.resolve(process.env.DEMONX_CIRCUIT_DEV_PROJECT));
+    await rememberProject(activeProject);
+    win.webContents.send('project:changed', activeProject);
+  }
   if (process.argv.includes('--capture-screenshot')) {
     await new Promise(resolve => setTimeout(resolve, 600));
     const image = await win.webContents.capturePage();

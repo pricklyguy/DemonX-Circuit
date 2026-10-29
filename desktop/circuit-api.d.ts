@@ -1,4 +1,5 @@
 interface ProjectSummary {
+  manufacturingBlocked?: boolean;
   name: string;
   projectId: string;
   revision: string;
@@ -23,6 +24,8 @@ interface OperationResult {
 }
 
 interface CircuitApi {
+  loadBoard(): Promise<MechanicalBoard>;
+  saveBoard(sha256: string, placements: BoardPlacement[]): Promise<MechanicalBoard>;
   getEnvironment(): Promise<NativeToolsSummary>;
   getNativeTools(): Promise<NativeToolsSummary>;
   selectKiCadInstall(): Promise<NativeToolsSummary>;
@@ -68,3 +71,16 @@ interface NativeToolsSummary {
 }
 
 interface Window { circuit: CircuitApi; }
+
+interface BoardPlacement { ref: string; x: number; y: number; rotation: number }
+interface BoardFootprint extends BoardPlacement {
+ value: string; library: string; layer: string;
+ body: {x1:number;y1:number;x2:number;y2:number}|null;
+ pads: Array<{number:string;type:string;x:number;y:number;width:number;height:number;drill:number;net:string}>;
+}
+interface MechanicalBoard {
+ sha256:string; path:string; bounds:{x:number;y:number;width:number;height:number};
+ edges:Array<{a:number[];b:number[]}>; footprints:BoardFootprint[]; routed:boolean;
+ issues:string[];
+ constraints:{description?:string;references?:Array<{label:string;x:number;y:number;width?:number;height?:number;radius?:number}>;keepouts?:Array<{label:string;x:number;y:number;width:number;height:number}>};
+}

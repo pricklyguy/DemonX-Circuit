@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
 contextBridge.exposeInMainWorld("circuit", {
+  loadBoard: () => ipcRenderer.invoke('pcb:load'),
+  saveBoard: (sha256: string, placements: BoardPlacement[]) => ipcRenderer.invoke('pcb:save', sha256, placements),
   getEnvironment: () => ipcRenderer.invoke("env:get"),
   getNativeTools: () => ipcRenderer.invoke("native-tools:get"),
   selectKiCadInstall: () => ipcRenderer.invoke("native-tools:select-kicad"),

@@ -66,6 +66,9 @@ jobs:
       - name: Test the DemonX schematic semantic model
         run: npm run test:schematic-model
 
+      - name: Test immutable native PCB mechanical revisions
+        run: npm run test:pcb-mechanical
+
       - name: Test constrained native schematic import and export
         env:
           DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke
@@ -120,6 +123,7 @@ jobs:
           New-Item -ItemType Directory -Force "$appRoot/desktop" | Out-Null
           Copy-Item desktop/main.cjs "$appRoot/desktop/main.cjs" -Force
           Copy-Item desktop/kicad-schematic-adapter.cjs "$appRoot/desktop/kicad-schematic-adapter.cjs" -Force
+          Copy-Item desktop/pcb-mechanical.cjs "$appRoot/desktop/pcb-mechanical.cjs" -Force
           Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
           Copy-Item desktop/assets "$appRoot/desktop/assets" -Recurse -Force

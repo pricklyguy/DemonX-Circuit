@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-  [switch]$Watch
+  [switch]$Watch,
+  [string]$Project
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,11 @@ $buildRoot = Join-Path $repoRoot 'build'
 $devRoot = Join-Path $buildRoot 'dev'
 $logRoot = Join-Path $devRoot 'logs'
 $profileRoot = Join-Path $devRoot 'profile'
+if ($Project) {
+  $projectRoot = (Resolve-Path -LiteralPath $Project).Path
+  if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'project.json') -PathType Leaf)) { throw 'Project must be a DemonX project folder containing project.json.' }
+  $env:DEMONX_CIRCUIT_DEV_PROJECT = $projectRoot
+} else { Remove-Item Env:DEMONX_CIRCUIT_DEV_PROJECT -ErrorAction SilentlyContinue }
 $null = New-Item -ItemType Directory -Force -Path $logRoot, $profileRoot
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $logPath = Join-Path $logRoot "circuit-dev-$stamp.log"

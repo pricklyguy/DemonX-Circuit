@@ -8,6 +8,7 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "test:pcb-mechanical": "npm run build && node prototype/pcb-mechanical-smoke.mjs",
     "build": "tsc -p desktop/tsconfig.json && esbuild desktop/renderer.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=desktop/dist/renderer.js",
     "test:schematic-model": "npm run build && node prototype/schematic-model-smoke.mjs",
     "test:native-roundtrip": "npm run build && node prototype/native-roundtrip-smoke.mjs",

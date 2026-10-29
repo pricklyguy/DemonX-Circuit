@@ -1,4 +1,6 @@
 import { mount as mountSchematicEditor } from './schematic-editor';
+import { mountBoardWorkspace } from './pcb-workspace';
+mountBoardWorkspace();
 
 type IdTypeMap = { 'result-dialog': HTMLDialogElement; 'yaml-dialog': HTMLDialogElement; 'replace-dialog': HTMLDialogElement; 'settings-dialog': HTMLDialogElement; 'native-commit-dialog': HTMLDialogElement; 'yaml-content': HTMLTextAreaElement };
 const $ = <K extends string>(id: K): K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement => document.getElementById(id) as K extends keyof IdTypeMap ? IdTypeMap[K] : HTMLElement;
@@ -64,7 +66,8 @@ function updateProject(project: ProjectSummary | null) {
   $('open-schematic').toggleAttribute('disabled', !project?.files.schematic);
   $('open-pcb').toggleAttribute('disabled', !project?.files.pcb);
   $('check-circuit').toggleAttribute('disabled', !opened || (!project.files.schematic && !project.files.pcb));
-  $('prepare-manufacturing').toggleAttribute('disabled', !project?.files.pcb);
+  $('prepare-manufacturing').toggleAttribute('disabled', !project?.files.pcb || !!project.manufacturingBlocked);
+  $('open-circuit-pcb').toggleAttribute('disabled', !project?.files.pcb);
   $('generate-esphome').toggleAttribute('disabled', !project?.capabilities.esphome);
   $('open-circuit-schematic').toggleAttribute('disabled', !project?.files.schematic);
   void refreshRecentProjects();
@@ -225,12 +228,12 @@ let devUpdatePending = false;
 window.circuit.onDevRendererUpdate(() => {
   devUpdatePending = true;
   const banner = $('dev-reload-banner');
-  if (document.body.dataset.schematicDirty === 'true' || !$('schematic-workspace').classList.contains('hidden')) banner.classList.remove('hidden');
-  else window.setTimeout(() => { if (devUpdatePending && document.body.dataset.schematicDirty !== 'true') window.location.reload(); }, 350);
+  if (document.body.dataset.schematicDirty === 'true' || document.body.dataset.pcbDirty === 'true' || !$('pcb-workspace').classList.contains('hidden') || !$('schematic-workspace').classList.contains('hidden')) banner.classList.remove('hidden');
+  else window.setTimeout(() => { if (devUpdatePending && document.body.dataset.schematicDirty !== 'true' && document.body.dataset.pcbDirty !== 'true' && $('pcb-workspace').classList.contains('hidden') && $('schematic-workspace').classList.contains('hidden')) window.location.reload(); }, 350);
 });
 $('dev-reload-now').addEventListener('click', () => {
-  if (document.body.dataset.schematicDirty === 'true') {
-    showResult({ status: 'NOT TESTED', title: 'Save before reloading', message: 'The schematic has unsaved edits. Save a DemonX revision first; the development reload will remain deferred.' });
+  if (document.body.dataset.schematicDirty === 'true' || document.body.dataset.pcbDirty === 'true') {
+    showResult({ status: 'NOT TESTED', title: 'Save before reloading', message: 'The workspace has unsaved edits. Save a revision first; the development reload will remain deferred.' });
     return;
   }
   window.location.reload();

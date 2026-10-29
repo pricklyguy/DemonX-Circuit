@@ -15,3 +15,11 @@
 .shortcut-list{display:grid;grid-template-columns:minmax(155px,auto) 1fr;gap:10px 16px;margin:18px 0}.shortcut-list dt{font:11px Consolas,monospace;color:var(--copper)}.shortcut-list dd{margin:0;color:var(--muted);font-size:11px}
 /* Safe development rebuild notice; hidden unless Electron reports a new local bundle. */
 .dev-reload-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 12px;padding:10px 13px;border:1px solid color-mix(in srgb,var(--copper) 45%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--copper) 9%,var(--panel));color:var(--text);font-size:12px}
+/* Mechanical workspace uses a fixed front projection. Back footprints retain native layers. */
+.pcb-workspace { position:fixed;inset:0;z-index:20;background:var(--bg, #10191f);color:var(--text, #e2edf1);overflow:auto;padding:24px; }
+.pcb-toolbar {display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
+.pcb-toolbar select,.pcb-table input {background:#18282e;color:#e2edf1;border:1px solid #54717b;border-radius:4px;padding:5px;}
+.pcb-grid {display:grid;grid-template-columns:minmax(300px, 45%) 1fr;gap:24px;}
+#pcb-canvas {width:100%;height:calc(100vh - 235px);min-height:400px;background:#0d171d;border:1px solid #39505a;border-radius:8px;}
+.pcb-sidebar {font-size:13px;}.pcb-table {width:100%;border-collapse:collapse;}.pcb-table td,.pcb-table th {text-align:left;padding:5px;border-bottom:1px solid #39505a;}.pcb-table input {width:66px;}.pcb-table-scroll {max-height:280px;overflow:auto;}#pcb-issues p {border-left:2px solid #d4a85b;padding-left:8px;}#pcb-error {color:#efba76;}
+@media(max-width:950px){.pcb-grid{grid-template-columns:1fr;}#pcb-canvas{height:650px;}}

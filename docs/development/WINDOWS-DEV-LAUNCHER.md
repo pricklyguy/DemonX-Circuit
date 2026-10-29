@@ -35,6 +35,11 @@ discarded and saving does not unexpectedly close the editor. The development app
 isolated profile in `build\dev\profile`, so it does not alter the normal preview
 profile or its recent projects and theme preferences.
 
+To open a specific local project on startup, append `-Project <project-folder>`.
+The folder must contain `project.json`. This affects only the isolated development
+profile. The board workspace also defers reload and refuses explicit reload while
+it contains unsaved placement edits.
+
 Changes to Electron main-process code or native adapters require closing and
 relaunching the development app; watch mode does not hot-restart the privileged
 process.
