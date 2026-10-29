@@ -7,6 +7,9 @@ export interface AssemblyInputs {
  femaleBodyMm: number;
  existingPcbFrontMm: number;
  proposedPcbFrontMm: number;
+ proposedPcbFrontStatus?: 'conditional-proposal' | 'owner-selected-target';
+ proposedPcbFrontBasis?: string;
+ matingFullySeatedObserved?: boolean;
  pcbThicknessMm: number;
  actuatorTipMm: number;
  switchHeightMm: number;
@@ -40,7 +43,7 @@ const rnd=(n:number)=>Math.round(n*1e6)/1e6;
 export function evaluateAssembly(input:AssemblyInputs,nativeThicknessMm?:number|null) {
  if(!input||input.format!=='demonx-assembly-stackup-v1')throw new Error('Unsupported assembly stack-up format.');
  if(typeof input.datumLabel!=='string'||!input.datumLabel.trim())throw new Error('Assembly requires an explicit reference plane.');
- for(const key of ['displayRearMm','malePinExtensionMm','femaleBodyMm','existingPcbFrontMm','proposedPcbFrontMm','pcbThicknessMm','actuatorTipMm','switchHeightMm','targetRestGapMm','targetPlasticClearanceMm'] as const)finite(key,input[key],key!=='displayRearMm'&&key!=='actuatorTipMm');
+ for(const key of ['displayRearMm','malePinExtensionMm','femaleBodyMm','existingPcbFrontMm','proposedPcbFrontMm','pcbThicknessMm','actuatorTipMm','switchHeightMm','targetRestGapMm','targetPlasticClearanceMm'] as const)finite(key,input[key],key!=='displayRearMm'&&key!=='actuatorTipMm'&&key!=='targetPlasticClearanceMm');
  for(const key of ['malePlasticProjectionMm','socketCavityDepthMm','contactStartMm','contactEndMm','requiredContactOverlapMm','switchOperatingTravelMm','switchSafeTravelMm','rearSocketBodyMm'] as const)if(input[key]!=null)finite(key,input[key],['socketCavityDepthMm','requiredContactOverlapMm','rearSocketBodyMm'].includes(key));
  if(!Array.isArray(input.alternativesMm)||input.alternativesMm.length>12)throw new Error('Assembly alternatives must be a short list.');
  for(const p of input.alternativesMm)finite('mounting alternative',p,true);
@@ -49,10 +52,10 @@ export function evaluateAssembly(input:AssemblyInputs,nativeThicknessMm?:number|
  if(input.switchOperatingTravelMm!=null&&input.switchSafeTravelMm!=null&&input.switchSafeTravelMm<input.switchOperatingTravelMm)throw new Error('Safe switch travel is smaller than operating travel.');
  const thickness=nativeThicknessMm==null?input.pcbThicknessMm:nativeThicknessMm;
  finite('native PCB thickness',thickness,true);
- const warnings=['1D nominal stack only: no mesh collision, tolerance, connector mating or switch actuation verification.'];
+ const warnings=[input.matingFullySeatedObserved?'1D nominal stack only: no mesh collision, final tolerance stack, installed PCB/connector clearance or switch actuation verification. Physical connector seating is recorded separately.':'1D nominal stack only: no mesh collision, tolerance, connector mating or switch actuation verification.'];
  if(nativeThicknessMm!=null&&Math.abs(nativeThicknessMm-input.pcbThicknessMm)>1e-6)warnings.push('Native PCB thickness differs from the assembly note; calculations use the native PCB thickness.');
  if(!input.switchSeatHeightVerified)warnings.push('Reported switch overall height has not been confirmed as PCB-seat-to-actuator height.');
- if(input.malePlasticProjectionMm==null)warnings.push('Male-header plastic projection is unknown; clearance to the display PCB alone is insufficient.');
+ if(input.malePlasticProjectionMm==null)warnings.push(input.matingFullySeatedObserved?'Male-header plastic projection is not separately dimensioned; observed full seating supports the nominal reference only, not final tolerances or installed clearance.':'Male-header plastic projection is unknown; clearance to the display PCB alone is insufficient.');
  if(input.rearSocketBodyMm==null)warnings.push('Rear ESP32 socket height and full module/removal stack remain unmeasured.');
  const pinTip=rnd(input.displayRearMm+input.malePinExtensionMm);
  const row=(p:number):AssemblyRow=>{
@@ -68,7 +71,7 @@ export function evaluateAssembly(input:AssemblyInputs,nativeThicknessMm?:number|
   if(input.contactStartMm!=null&&input.contactEndMm!=null)overlap=rnd(Math.max(0,Math.min(insertion,input.contactEndMm)-input.contactStartMm));
   const internalsKnown=overlap!=null&&input.socketCavityDepthMm!=null&&input.requiredContactOverlapMm!=null;
   const internalFailure=(input.socketCavityDepthMm!=null&&insertion>=input.socketCavityDepthMm)||(overlap!=null&&input.requiredContactOverlapMm!=null&&overlap<input.requiredContactOverlapMm);
-  let contactStatus=internalFailure?'FAIL against entered contact/cavity dimensions':internalsKnown?'Nominal entered contact/cavity dimensions satisfied; tolerances and real mating unverified':'UNVERIFIED: contact region, overlap requirement or cavity depth missing';
+  let contactStatus=internalFailure?'FAIL against entered contact/cavity dimensions':internalsKnown?'Nominal entered contact/cavity dimensions satisfied; tolerances and real mating unverified':input.matingFullySeatedObserved?'Physical full-seat observed; internal contact overlap, solder-tail clearance and final tolerances UNVERIFIED':'UNVERIFIED: contact region, overlap requirement or cavity depth missing';
   if(boardGap<0||insertion<=0||pinTip>=p||(maleGap!=null&&maleGap<0))contactStatus='FAIL exterior geometry; contact internals cannot establish fit';
   const gap=rnd(p-input.switchHeightMm-input.actuatorTipMm),actuator=rnd(p-input.switchHeightMm-input.targetRestGapMm);
   if(gap<=0)issues.push('Existing actuator nominally preloads the switch.');
@@ -76,7 +79,7 @@ export function evaluateAssembly(input:AssemblyInputs,nativeThicknessMm?:number|
   return {pcbFrontMm:p,pcbRearMm:rnd(p+thickness),socketMouthMm:mouth,displayBoardClearanceMm:boardGap,malePlasticClearanceMm:maleGap,insertionMm:insertion,pinTipToPcbMm:rnd(p-pinTip),existingButtonGapMm:gap,proposedActuatorMm:actuator,actuatorChangeMm:rnd(actuator-input.actuatorTipMm),rearSocketMouthMm:input.rearSocketBodyMm==null?null:rnd(p+thickness+input.rearSocketBodyMm),contactOverlapMm:overlap,contactStatus,warnings:issues};
  };
  const proposed=row(input.proposedPcbFrontMm),existing=row(input.existingPcbFrontMm);
- return {datumLabel:input.datumLabel,pinTipMm:pinTip,thicknessMm:thickness,existing,proposed,alternatives:[...new Set([input.existingPcbFrontMm,...input.alternativesMm,input.proposedPcbFrontMm])].sort((a,b)=>a-b).map(row),warnings,
+ return {datumLabel:input.datumLabel,pinTipMm:pinTip,thicknessMm:thickness,proposedPcbFrontStatus:input.proposedPcbFrontStatus??'conditional-proposal',proposedPcbFrontBasis:input.proposedPcbFrontBasis??null,existing,proposed,alternatives:[...new Set([input.existingPcbFrontMm,...input.alternativesMm,input.proposedPcbFrontMm])].sort((a,b)=>a-b).map(row),warnings,
   nominalMinimumPlaneMm:rnd(input.displayRearMm+input.femaleBodyMm+input.targetPlasticClearanceMm),
   makeStrokeMm:input.switchOperatingTravelMm==null?null:rnd(input.targetRestGapMm+input.switchOperatingTravelMm),
   maximumStopStrokeMm:input.switchSafeTravelMm==null?null:rnd(input.targetRestGapMm+input.switchSafeTravelMm)};

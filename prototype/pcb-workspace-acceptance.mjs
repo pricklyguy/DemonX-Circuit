@@ -32,6 +32,10 @@ try {
   const content=await evaluate("document.getElementById('pcb-assembly').textContent");
   assert.ok(content.includes(baseline.constraints.assembly.datumLabel));
   assert.match(content,/UNVERIFIED/,'unknown contact geometry must remain explicit in the real renderer');
+  if(baseline.constraints.assembly.proposedPcbFrontStatus==='owner-selected-target') {
+   assert.ok(content.includes(`Owner-selected PCB front target ${baseline.constraints.assembly.proposedPcbFrontMm}`),'selected owner target should be labeled in the real renderer');
+   assert.ok(content.includes(baseline.constraints.assembly.proposedPcbFrontBasis),'physical selection basis should be visible in the real renderer');
+  }
   await capture('assembly-depth-review.png');
   await evaluate("document.getElementById('pcb-assembly-details').open=false");
   report.checks.push('PASS: measured assembly inputs render with unknown contact and actuation data kept explicit');

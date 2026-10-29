@@ -10,6 +10,12 @@ All lengths are millimetres behind an explicit owner-defined reference plane.
 It contains measured display-back position, male-pin extension, socket body
 height, existing/proposed front PCB support planes and switch/actuator dimensions.
 References, sources and uncertainty should remain in the local project record.
+Optional target-status and basis fields distinguish a conditional proposal from
+an owner-selected mechanical target. An optional fully-seated-observed flag can
+record physical connector seating, but never marks contacts, solder tails or
+assembly tolerances verified. A zero nominal body-to-display gap is valid when
+the owner records a physically touching stack; it is not a zero-tolerance design
+allowance.
 
 The PCB reader obtains thickness from the native board's `general/thickness`
 field. Calculations use that value when available and warn if it differs from
@@ -23,6 +29,9 @@ contact overlap are separate optional inputs. Missing inputs produce an explicit
 unverified result. Male-header plastic projection is also separate; clearance to
 the display PCB rear surface does not imply clearance to its male insulator.
 Even complete nominal entered dimensions do not verify real mating or tolerances.
+When the actual connector pair was physically seated, the workspace may state
+that observation separately while retaining unverified contact overlap, PCB
+solder-tail clearance and final tolerance status.
 
 Reported switch overall height is not silently treated as a verified seating
 datum. The review warns unless PCB-seat-to-actuator height has been confirmed.

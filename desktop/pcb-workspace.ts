@@ -56,7 +56,8 @@ export function mountBoardWorkspace() {
    const heading=document.createElement('h3');heading.textContent='Assembly depth review · mm';assembly.append(heading);
    try {
     const stack=evaluateAssembly(board.constraints.assembly,board.thicknessMm),p=stack.proposed;
-    for(const message of [`Reference: ${stack.datumLabel}; positive depth is behind this plane.`,`Proposed PCB front ${p.pcbFrontMm}; rear ${p.pcbRearMm}. Display pin tips ${stack.pinTipMm}.`,`Socket mouth ${p.socketMouthMm}; display PCB gap ${p.displayBoardClearanceMm}; pin insertion into body ${p.insertionMm}.`,p.contactStatus,`Button: existing rest gap ${p.existingButtonGapMm}; proposed actuator tip ${p.proposedActuatorMm} for the stated rest-gap target. Travel and stop remain unverified.`,...stack.warnings,...p.warnings]){const line=document.createElement('p');line.textContent=message;assembly.append(line);}
+    const targetLabel=stack.proposedPcbFrontStatus==='owner-selected-target'?'Owner-selected PCB front target':'Proposed PCB front';
+    for(const message of [`Reference: ${stack.datumLabel}; positive depth is behind this plane.`,`${targetLabel} ${p.pcbFrontMm}; rear ${p.pcbRearMm}. Display pin tips ${stack.pinTipMm}.`,...(stack.proposedPcbFrontBasis?[`Selection basis: ${stack.proposedPcbFrontBasis}`]:[]),`Socket mouth ${p.socketMouthMm}; display PCB gap ${p.displayBoardClearanceMm}; pin insertion into body ${p.insertionMm}.`,p.contactStatus,`Button: existing rest gap ${p.existingButtonGapMm}; proposed actuator tip ${p.proposedActuatorMm} for the stated rest-gap target. Travel and stop remain unverified.`,...stack.warnings,...p.warnings]){const line=document.createElement('p');line.textContent=message;assembly.append(line);}
    } catch(error){const line=document.createElement('p');line.textContent=`Assembly data refused: ${String(error)}`;assembly.append(line);}
   }
   draw();
