@@ -124,12 +124,16 @@ export function routeSchematicWires(document: SchematicDocument): { routes: Wire
       if (routeKey(x, y) !== routeKey(start.x, start.y) && routeKey(x, y) !== routeKey(end.x, end.y)) {
         const owner = reservedByNet.get(routeKey(x, y));
         if (owner && owner !== netId) return true;
+        // Reserve the rendered component body. The supported symbols occupy at
+        // most one model-grid cell from their origin; the wider lead area stays
+        // routable so close but valid starter placements still have a path.
         for (const component of document.components) if (Math.abs(x - component.x) <= 1 && Math.abs(y - component.y) <= 1) return true;
         for (const [id, point] of pinPoints) if (id !== wire.fromNodeId && id !== wire.toNodeId && point.x === x && point.y === y) return true;
         for (const junction of document.junctions) if (junction.id !== wire.fromNodeId && junction.id !== wire.toNodeId && junction.x === x && junction.y === y) return true;
         for (const label of document.labels) {
+          if (label.nodeId === wire.fromNodeId || label.nodeId === wire.toNodeId) continue;
           const point = nodePoint(label.nodeId);
-          if (point && x >= point.x && x <= point.x + Math.max(1, Math.ceil(label.name.length / 4)) && Math.abs(y - point.y) <= 1) return true;
+          if (point && x >= point.x - Math.max(1, Math.ceil(label.name.length / 4)) && x <= point.x + 1 && Math.abs(y - point.y) <= 1) return true;
         }
       }
       return false;

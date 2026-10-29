@@ -86,13 +86,14 @@
           <button id="schematic-back" class="button secondary">← Project</button>
           <div class="schematic-toolbar-title"><div class="eyebrow">DEMONX SCHEMATIC EDITOR</div><strong>LED and resistor starter</strong></div>
           <div class="schematic-tools">
-            <button id="schematic-add" class="button secondary">Add Component</button>
-            <button id="schematic-select" class="button secondary active">Select</button>
-            <button id="schematic-wire" class="button secondary">Wire</button>
-            <button id="schematic-rotate" class="button secondary">Rotate</button>
-            <button id="schematic-delete" class="button secondary">Delete</button>
-            <button id="schematic-undo" class="button secondary" disabled>Undo</button>
-            <button id="schematic-redo" class="button secondary" disabled>Redo</button>
+            <button id="schematic-select" class="button secondary active" title="Select tool (V)">Select</button>
+            <button id="schematic-add" class="button secondary" title="Component tool (A)">Component</button>
+            <button id="schematic-wire" class="button secondary" title="Wire tool (W)">Wire</button>
+            <button id="schematic-rotate" class="button secondary" title="Rotate selected or preview (R)">Rotate</button>
+            <button id="schematic-delete" class="button secondary" title="Delete selection (Delete)">Delete</button>
+            <button id="schematic-undo" class="button secondary" title="Undo (Ctrl+Z)" disabled>Undo</button>
+            <button id="schematic-redo" class="button secondary" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
+            <button id="schematic-shortcuts" class="button secondary" title="Keyboard shortcuts (?)">Shortcuts</button>
             <button id="schematic-save" class="button primary">Save Revision</button>
             <button id="schematic-stage-native" class="button primary">Validate &amp; Stage</button>
             <button id="schematic-open-stage" class="button secondary" disabled>Open Candidate in KiCad</button>
@@ -103,15 +104,17 @@
         <div class="schematic-body">
           <div class="schematic-canvas-shell">
             <div class="schematic-canvas-toolbar">
-              <span>50 mil grid <i>·</i> scroll to zoom <i>·</i> Space + drag to pan</span>
+              <span>50 mil model grid <i>·</i> scroll to zoom at pointer <i>·</i> Space + drag to pan</span>
+              <label class="schematic-view-toggle"><input id="schematic-grid-visible" type="checkbox" checked> Grid</label>
+              <label class="schematic-view-toggle"><input id="schematic-snap" type="checkbox" checked> Snap</label>
               <label class="schematic-view-toggle"><input id="schematic-pin-numbers" type="checkbox"> Pin numbers</label>
               <label class="schematic-view-toggle"><input id="schematic-pin-names" type="checkbox"> Pin names</label>
-              <div><button id="schematic-zoom-out" class="icon-button" aria-label="Zoom out">−</button><button id="schematic-zoom-in" class="icon-button" aria-label="Zoom in">＋</button><button id="schematic-fit" class="button secondary">Fit</button></div>
+              <div><button id="schematic-zoom-out" class="icon-button" aria-label="Zoom out" title="Zoom out">−</button><button id="schematic-zoom-in" class="icon-button" aria-label="Zoom in" title="Zoom in">＋</button><button id="schematic-fit" class="button secondary" title="Fit to schematic (F)">Fit</button><button id="schematic-reset-view" class="button secondary" title="Reset view">Reset</button></div>
             </div>
             <div id="schematic-stage" class="schematic-stage" aria-label="Interactive schematic canvas"></div>
             <div id="schematic-status" class="schematic-status" role="status">Loading schematic…</div>
           </div>
-          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Component details</h2><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component to see its details.</div></div><div class="schematic-engine-note"><strong id="schematic-sync-state">Edits are staged before KiCad changes.</strong><p>Save creates a recoverable DemonX revision. Validate &amp; Stage exports a separate native candidate, compares original and candidate netlists, and runs KiCad ERC. The original stays unchanged until you review and explicitly approve commit. Edits outside the supported symbol/wire/label subset are refused.</p><p id="schematic-source-hash" class="muted">Native revision hash: checking…</p></div></aside>
+          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Selection &amp; connection</h2><div id="schematic-revision-state" class="revision-state" data-state="synced">Imported native schematic · in sync</div><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component, pin, or wire to inspect it.</div></div><section class="net-panel"><div class="schematic-property-label">CONNECTED NET</div><div id="schematic-net-info" class="schematic-property-empty">Click a wire or pin to highlight its complete net.</div></section><div class="schematic-engine-note"><strong id="schematic-sync-state">Edits are staged before KiCad changes.</strong><p>Save creates a recoverable DemonX revision. Validate &amp; Stage exports a separate native candidate, compares original and candidate netlists, and runs KiCad ERC. The original stays unchanged until you review and explicitly approve commit. Edits outside the supported symbol/wire/label subset are refused.</p><p id="schematic-source-hash" class="muted">Native revision hash: checking…</p></div></aside>
         </div>
       </section>
       <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately <span id="dev-build-id"></span></span><span>AI suggestions are not engineering verification.</span></footer>
@@ -122,6 +125,7 @@
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>
   <dialog id="component-picker" class="modal component-picker"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Add a component</h2></div><button class="close-button" aria-label="Close">×</button></div><input id="component-search" class="component-search" type="search" placeholder="Search resistors, LEDs, connectors…" autocomplete="off"><div id="component-choices" class="component-choices"></div><div class="modal-actions"><button class="button secondary">Cancel</button></div></form></dialog>
+  <dialog id="schematic-shortcuts-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SCHEMATIC EDITOR</div><h2>Keyboard shortcuts</h2></div><button class="close-button" aria-label="Close">×</button></div><dl class="shortcut-list"><dt>V</dt><dd>Select tool</dd><dt>A</dt><dd>Choose component and place once</dd><dt>W</dt><dd>Wire tool</dd><dt>R</dt><dd>Rotate selection or placement preview</dd><dt>Delete</dt><dd>Delete selected component or connection</dd><dt>Ctrl+Z</dt><dd>Undo</dd><dt>Ctrl+Y / Ctrl+Shift+Z</dt><dd>Redo</dd><dt>Esc</dt><dd>Cancel current operation and clear selection</dd><dt>F</dt><dd>Fit schematic to view</dd><dt>Space + drag</dt><dd>Pan canvas</dd><dt>Mouse wheel</dt><dd>Zoom around pointer</dd></dl><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="native-commit-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">NATIVE SCHEMATIC APPROVAL</div><h2>Commit validated candidate?</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="native-commit-message">Review the exact source and candidate hashes. A non-overwriting backup will be created before the KiCad file is replaced.</p><pre id="native-commit-details" class="output"></pre><div class="modal-actions"><button id="native-commit-cancel" class="button secondary" type="button">Keep original</button><button id="native-commit-approve" class="button danger" type="button">Approve &amp; Commit</button></div></form></dialog>
   <script src="./dist/renderer.js"></script>
 </body>

@@ -162,9 +162,19 @@ async function replaceTextInput(selector, text) {
   await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await sleep(150);
 }
+async function pressKey(key, code, windowsVirtualKeyCode) {
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+  await sleep(100);
+}
 async function componentCanvasPoint(reference) {
   const point = await evaluate(`(async() => { const m=await window.circuit.loadSchematicModel(),c=m.components.find(item=>item.reference===${JSON.stringify(reference)}),e=document.getElementById('schematic-stage'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(),s=.85; const x=r.left+e.clientWidth/2-50*20*s+c.x*20*s,y=r.top+e.clientHeight/2-40*20*s+c.y*20*s; return {x,y,insideViewport:x>=0&&x<innerWidth&&y>=0&&y<innerHeight}; })()`);
   if (!point?.insideViewport) throw new Error(`Schematic canvas or ${reference} is outside the packaged viewport: ${JSON.stringify(point)}`);
+  return point;
+}
+async function modelCanvasPoint(x, y, scale = 0.85, centerX = 50, centerY = 40) {
+  const point = await evaluate(`(() => { const e=document.getElementById('schematic-stage'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(); const sx=r.left+e.clientWidth/2-${centerX}*20*${scale}+${x}*20*${scale}, sy=r.top+e.clientHeight/2-${centerY}*20*${scale}+${y}*20*${scale}; return {x:sx,y:sy,insideViewport:sx>=0&&sx<innerWidth&&sy>=0&&sy<innerHeight}; })()`);
+  if (!point?.insideViewport) throw new Error(`Calculated model location (${x},${y}) is outside the packaged viewport: ${JSON.stringify(point)}`);
   return point;
 }
 async function pinCanvasPoint(reference, number) {
@@ -338,13 +348,54 @@ try {
     let editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('new native project opens its saved DemonX schematic sidecar', !!editorModel && editorModel.components.length === 3 && editorModel.wires.length === 3, JSON.stringify({ components: editorModel?.components?.length, wires: editorModel?.wires?.length }));
     await screenshot('schematic-editor-initial.png');
+    check('editor exposes the documented beginner tool set and shortcut help', ['schematic-select','schematic-add','schematic-wire','schematic-rotate','schematic-delete','schematic-undo','schematic-redo','schematic-fit','schematic-reset-view','schematic-shortcuts'].every(id => !!document.getElementById(id)) && await evaluate(`document.getElementById('schematic-select').classList.contains('active')`), 'Select active; component, wire, rotate, delete, undo/redo, fit/reset and shortcut reference present.');
+    await click('schematic-shortcuts');
+    const shortcutDialog = await evaluate(`({open:document.getElementById('schematic-shortcuts-dialog').open,escape:document.getElementById('schematic-shortcuts-dialog').textContent.includes('Esc'),pan:document.getElementById('schematic-shortcuts-dialog').textContent.includes('Space + drag')})`);
+    check('shortcut reference explains Escape cancellation and pan', shortcutDialog.open && shortcutDialog.escape && shortcutDialog.pan, JSON.stringify(shortcutDialog));
+    await clickSelector('#schematic-shortcuts-dialog .modal-actions button');
+    await click('schematic-pin-numbers'); await click('schematic-pin-names');
+    check('pin number and pin name visibility remain independent view options', await evaluate(`document.getElementById('schematic-pin-numbers').checked && document.getElementById('schematic-pin-names').checked`), 'Both display toggles independently enabled.');
+    await click('schematic-pin-numbers'); await click('schematic-pin-names');
+    await click('schematic-grid-visible'); await click('schematic-snap');
+    check('grid visibility and supported-grid snap guide are configurable', !(await evaluate(`document.getElementById('schematic-grid-visible').checked || document.getElementById('schematic-snap').checked`)), 'Both view settings toggled off.');
+    await click('schematic-grid-visible'); await click('schematic-snap');
+    await click('schematic-fit'); await click('schematic-reset-view');
+    pass('Fit and Reset View controls execute in the packaged editor', 'Both view actions dispatched through actual UI clicks.');
 
     await click('schematic-add');
-    await waitUntil(`document.getElementById('component-picker').open`, 'open component search dialog');
+    await waitUntil(`document.getElementById('component-picker').open`, 'open searchable component dialog');
+    await replaceTextInput('#component-search', 'Resistor');
+    check('component search matches supported library components and shows real symbol preview', await evaluate(`document.querySelectorAll('#component-choices .component-choice').length === 1 && !!document.querySelector('#component-choices .component-symbol-preview')`), 'Search=Resistor; symbol preview present.');
     await clickSelector('.component-choice');
-    await saveEditorRevision('save newly placed component revision');
+    check('choosing a component enters cursor placement without modifying the project', await evaluate(`document.querySelector('#schematic-add')?.classList.contains('active') && document.querySelectorAll('#schematic-stage canvas').length > 0 && document.querySelector('#schematic-stage canvas')?.getAttribute('width') !== '0'`) && (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, `mode=${await evaluate(`document.getElementById('schematic-status').textContent`)}`);
+    await pressKey('Escape', 'Escape', 27);
+    const cancelledPlacement = await evaluate(`({active:document.querySelector('#schematic-add')?.classList.contains('active'),count:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent})`);
+    check('Escape cancels pending placement without changing the schematic', !cancelledPlacement.active && cancelledPlacement.count === 3 && /cancel/i.test(cancelledPlacement.status), JSON.stringify(cancelledPlacement));
+    await click('schematic-add'); await waitUntil(`document.getElementById('component-picker').open`, 'reopen searchable component dialog after cancel');
+    await replaceTextInput('#component-search', 'Resistor'); await clickSelector('.component-choice');
+    await click('schematic-rotate');
+    const prePlacementPreview = await evaluate(`({mode:document.getElementById('schematic-add').classList.contains('active'),modelCount:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent})`);
+    check('Rotate turns the ghosted resistor before placement', prePlacementPreview.mode && prePlacementPreview.modelCount === 3 && /90°/.test(prePlacementPreview.status), JSON.stringify(prePlacementPreview));
+    const resistorDrop = await modelCanvasPoint(70, 50); await clickCanvasAt(resistorDrop.x, resistorDrop.y);
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
-    check('component picker adds a real library component', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
+    check('single canvas click places a rotated resistor on supported grid', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'R2' && c.libId === 'Device:R' && c.rotation === 90 && Number.isInteger(c.x) && Number.isInteger(c.y)), JSON.stringify(editorModel?.components?.map(c => [c.reference, c.rotation, c.x, c.y])));
+    const afterPlace = await evaluate('window.circuit.loadSchematicModel()');
+    const secondClick = await modelCanvasPoint(72, 52); await clickCanvasAt(secondClick.x, secondClick.y);
+    check('placement exits after one click and cannot create accidental duplicates', (await evaluate('window.circuit.loadSchematicModel()')).components.length === afterPlace.components.length, JSON.stringify((await evaluate('window.circuit.loadSchematicModel()')).components.map(c => c.reference)));
+    await click('schematic-undo');
+    check('undo restores the prior component list', (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, 'Component placement undone.');
+    await click('schematic-redo');
+    check('redo restores the placed resistor and its orientation', (await evaluate('window.circuit.loadSchematicModel()')).components.some(c => c.reference === 'R2' && c.rotation === 90), 'R2 rotation=90.');
+    await click('schematic-delete');
+    check('Delete removes the selected resistor', (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, 'R2 deleted.');
+
+    await click('schematic-add'); await waitUntil(`document.getElementById('component-picker').open`, 'open component dialog for connector');
+    await replaceTextInput('#component-search', 'Connector'); await clickSelector('.component-choice');
+    const connectorDrop = await modelCanvasPoint(54, 30); await clickCanvasAt(connectorDrop.x, connectorDrop.y);
+    editorModel = await evaluate('window.circuit.loadSchematicModel()');
+    check('connector can be placed after the one-shot component placement flow', editorModel?.components?.some(c => c.reference === 'J2' && c.libId.includes('Conn_01x02')), JSON.stringify(editorModel?.components?.map(c => c.reference)));
+    await saveEditorRevision('save placed connector revision');
+    check('saved editor revision state distinguishes the sidecar from native KiCad synchronization', await evaluate(`document.getElementById('schematic-revision-state').dataset.state === 'sidecar' && /native schematic not synchronized/i.test(document.getElementById('schematic-revision-state').textContent)`), await evaluate(`document.getElementById('schematic-revision-state').textContent`));
     await click('schematic-undo');
     await saveEditorRevision('save undo revision');
     const afterUndo = await evaluate('window.circuit.loadSchematicModel()');
@@ -354,7 +405,7 @@ try {
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('redo restores component addition', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'J2'), JSON.stringify(editorModel?.components?.map(c => c.reference)));
 
-    const componentCenter = await evaluate(`(async() => { const c=(await window.circuit.loadSchematicModel()).components.find(item=>item.reference==='J2'); const e=document.getElementById('schematic-stage'),r=e.getBoundingClientRect(),s=.85; return {x:r.left+e.clientWidth/2-50*20*s+c.x*20*s,y:r.top+e.clientHeight/2-40*20*s+c.y*20*s}; })()`);
+    const componentCenter = await componentCanvasPoint('J2');
     await clickCanvasAt(componentCenter.x, componentCenter.y);
     await click('schematic-rotate');
     await saveEditorRevision('save rotation revision');
@@ -390,6 +441,11 @@ try {
     check('drag placement snaps to model grid and retains component identity', editorModel?.components?.find(c => c.reference === 'J2')?.x === beforeDrag.x + 2 && editorModel?.components?.find(c => c.reference === 'J2')?.id === beforeDrag.id, JSON.stringify({ before: beforeDrag, after: editorModel?.components?.find(c => c.reference === 'J2') }));
 
     await click('schematic-wire');
+    const cancelPinPoint = await pinCanvasPoint('J1', '1'); await clickCanvasAt(cancelPinPoint.x, cancelPinPoint.y);
+    await pressKey('Escape', 'Escape', 27);
+    const cancelledWire = await evaluate(`({wires:(await window.circuit.loadSchematicModel()).wires.length,active:document.getElementById('schematic-select').classList.contains('active'),status:document.getElementById('schematic-status').textContent})`);
+    check('Escape cancels a pending wire start without changing connectivity', cancelledWire.wires === 3 && cancelledWire.active && /cancel/i.test(cancelledWire.status), JSON.stringify(cancelledWire));
+    await click('schematic-wire');
     const wireTargets = await evaluate(`(async() => {
       const m = await window.circuit.loadSchematicModel(); const container = document.getElementById('schematic-stage'); const rect = container.getBoundingClientRect();
       const width = container.clientWidth, height = container.clientHeight, scale = 0.85;
@@ -406,6 +462,9 @@ try {
       const j1Id = wiredModel?.components?.find(c => c.reference === 'J1')?.id;
       const j2Id = wiredModel?.components?.find(c => c.reference === 'J2')?.id;
       check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j1Id}:1`) && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j2Id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
+      const selectedWirePoint = await wireBetweenCanvasPoint('J1', '1', 'J2', '1'); await clickCanvasAt(selectedWirePoint.x, selectedWirePoint.y);
+      const netInfo = await evaluate(`document.getElementById('schematic-net-info').textContent`);
+      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /J2\.1/.test(netInfo), netInfo);
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
 
     await click('schematic-save');
@@ -458,11 +517,12 @@ try {
     await dragCanvas(r1Point, { x: r1Point.x + 34, y: r1Point.y + 34 });
     await saveEditorRevision('save imported component move');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
-    check('packaged editor moves imported native component and retains its stable reference', editModel?.components?.find(c => c.reference === 'R1')?.x === 52 && editModel?.components?.find(c => c.reference === 'R1')?.y === 42, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
+    const originalNetGroups = [['D1.1', 'R1.2'], ['D1.2', 'J1.2'], ['J1.1', 'R1.1']];
+    check('packaged editor moves imported native component and retains exact pin connectivity', editModel?.components?.find(c => c.reference === 'R1')?.x === 52 && editModel?.components?.find(c => c.reference === 'R1')?.y === 42 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(originalNetGroups), JSON.stringify({ component: editModel?.components?.find(c => c.reference === 'R1'), netGroups: packageAdapter.netGroups(editModel) }));
     r1Point = await componentCanvasPoint('R1'); await clickCanvasAt(r1Point.x, r1Point.y); await click('schematic-rotate');
     await saveEditorRevision('save imported component rotation');
     editModel = await evaluate('window.circuit.loadSchematicModel()');
-    check('packaged editor rotates imported native component', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90, JSON.stringify(editModel?.components?.find(c => c.reference === 'R1')));
+    check('packaged editor rotates imported native component without changing pin connectivity', editModel?.components?.find(c => c.reference === 'R1')?.rotation === 90 && JSON.stringify(packageAdapter.netGroups(editModel)) === JSON.stringify(originalNetGroups), JSON.stringify({ component: editModel?.components?.find(c => c.reference === 'R1'), netGroups: packageAdapter.netGroups(editModel) }));
 
     await click('schematic-select');
     const semanticWireExists = (refA, pinA, refB, pinB) => { const idA = `pin:${editModel?.components?.find(c => c.reference === refA)?.id}:${pinA}`, idB = `pin:${editModel?.components?.find(c => c.reference === refB)?.id}:${pinB}`; return editModel?.wires?.some(w => (w.fromNodeId === idA && w.toNodeId === idB) || (w.fromNodeId === idB && w.toNodeId === idA)); };
