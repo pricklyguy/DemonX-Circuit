@@ -147,7 +147,9 @@ async function clickCanvasAt(x, y) {
   await sleep(100);
   const clicked = await evaluate('window.__acceptanceCanvasClick');
   if (!clicked) throw new Error(`Canvas click at (${x},${y}) did not reach the packaged page.`);
-  report.diagnostics.push({ kind: 'canvas-click', ...target, dispatched: clicked });
+  const state = await evaluate(`({status:document.getElementById('schematic-status')?.textContent||null,netInfo:document.getElementById('schematic-net-info')?.textContent||null})`);
+  report.diagnostics.push({ kind: 'canvas-click', ...target, dispatched: clicked, state });
+  return state;
 }
 async function dragCanvas(from, to) {
   await cdp('Page.bringToFront');
@@ -398,6 +400,7 @@ try {
     await click('schematic-redo');
     await saveEditorRevision('save placement redo revision');
     check('redo restores the placed resistor and its orientation', (await evaluate('window.circuit.loadSchematicModel()')).components.some(c => c.reference === 'R2' && c.rotation === 90), 'R2 rotation=90.');
+    const resistorCenter = await componentCanvasPoint('R2'); await clickCanvasAt(resistorCenter.x, resistorCenter.y);
     await click('schematic-delete');
     await saveEditorRevision('save resistor delete revision');
     check('Delete removes the selected resistor', (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, 'R2 deleted.');
@@ -432,6 +435,7 @@ try {
     await saveEditorRevision('save rotation redo revision');
     const redoneRotation = await evaluate('window.circuit.loadSchematicModel()');
     check('redo restores rotated component orientation', redoneRotation?.components?.find(c => c.reference === 'J2')?.rotation === 90, JSON.stringify(redoneRotation?.components?.find(c => c.reference === 'J2')));
+    const selectedJ2 = await componentCanvasPoint('J2'); await clickCanvasAt(selectedJ2.x, selectedJ2.y);
     await click('schematic-delete');
     await saveEditorRevision('save delete revision');
     const deletedComponent = await evaluate('window.circuit.loadSchematicModel()');
