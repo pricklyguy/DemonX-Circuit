@@ -26,8 +26,9 @@
           <button id="new-project" class="button primary">＋ New Project</button>
         </div>
       </header>
+      <div id="dev-reload-banner" class="dev-reload-banner hidden" role="status"><span>A development update is ready. Reload when convenient; unsaved schematic edits block reload.</span><button id="dev-reload-now" class="button secondary" type="button">Reload development build</button></div>
 
-      <section class="welcome">
+      <section id="welcome" class="welcome">
         <div class="welcome-copy">
           <div class="eyebrow accent">CIRCUIT DESIGN WORKSPACE</div>
           <h2 id="welcome-title">Start with an idea.</h2>
@@ -36,7 +37,7 @@
         <div class="workflow-note"><span class="step-number">01</span><span>Concept <b>→</b> Circuit <b>→</b> Board</span></div>
       </section>
 
-      <section class="workspace-grid">
+      <section id="workspace-grid" class="workspace-grid">
         <section class="card project-card" aria-labelledby="project-name">
           <div class="section-head"><div><div class="eyebrow">PROJECT</div><h2 id="project-name">No project open</h2></div><span id="project-state" class="tag neutral">READY</span></div>
           <div id="empty-project" class="empty-state"><div class="empty-symbol">DX</div><h3>Your next circuit starts here</h3><p>Use New Project or Open Project above. A starter project stores portable metadata and leaves design files in your control.</p></div>
@@ -44,6 +45,8 @@
             <div class="meta-grid"><div><span>PROJECT ID</span><strong id="project-id">—</strong></div><div><span>REVISION</span><strong id="project-revision">—</strong></div><div class="wide"><span>NATIVE DESIGN</span><strong id="native-status">—</strong></div></div>
             <div class="section-label">DESIGN ACTIONS</div>
             <div class="action-grid">
+              <button id="open-circuit-pcb" class="workflow-action" disabled><span class="action-icon">▦</span><span><strong>Mechanical PCB Workspace</strong><small>Review placement, dimensions and preliminary fit</small></span><b>→</b></button>
+              <button id="open-circuit-schematic" class="workflow-action" disabled><span class="action-icon">⌁</span><span><strong>Edit Schematic in Circuit</strong><small>Import supported KiCad designs; validate and approve native updates</small></span><b>→</b></button>
               <button id="open-schematic" class="workflow-action"><span class="action-icon">⌗</span><span><strong>Open Schematic in KiCad</strong><small>Use KiCad’s native editor</small></span><b>↗</b></button>
               <button id="open-pcb" class="workflow-action"><span class="action-icon">▦</span><span><strong>Open PCB in KiCad</strong><small>Placement and routing</small></span><b>↗</b></button>
               <button id="check-circuit" class="workflow-action"><span class="action-icon">✓</span><span><strong>Check Circuit</strong><small>Run native ERC and DRC</small></span><b>→</b></button>
@@ -79,13 +82,61 @@
           </section>
         </aside>
       </section>
-      <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately</span><span>AI suggestions are not engineering verification.</span></footer>
+      <section id="schematic-workspace" class="schematic-workspace hidden" aria-label="Schematic editor">
+        <div class="schematic-toolbar">
+          <button id="schematic-back" class="button secondary">← Project</button>
+          <div class="schematic-toolbar-title"><div class="eyebrow">DEMONX SCHEMATIC EDITOR</div><strong>LED and resistor starter</strong></div>
+          <div class="schematic-tools">
+            <button id="schematic-select" class="button secondary active" title="Select tool (V)">Select</button>
+            <button id="schematic-add" class="button secondary" title="Component tool (A)">Component</button>
+            <button id="schematic-wire" class="button secondary" title="Wire tool (W)">Wire</button>
+            <button id="schematic-rotate" class="button secondary" title="Rotate selected or preview (R)">Rotate</button>
+            <button id="schematic-delete" class="button secondary" title="Delete selection (Delete)">Delete</button>
+            <button id="schematic-undo" class="button secondary" title="Undo (Ctrl+Z)" disabled>Undo</button>
+            <button id="schematic-redo" class="button secondary" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
+            <button id="schematic-shortcuts" class="button secondary" title="Keyboard shortcuts (?)">Shortcuts</button>
+            <button id="schematic-save" class="button primary">Save Revision</button>
+            <button id="schematic-stage-native" class="button primary">Validate &amp; Stage</button>
+            <button id="schematic-open-stage" class="button secondary" disabled>Open Candidate in KiCad</button>
+            <button id="schematic-commit-native" class="button danger" disabled>Review &amp; Commit</button>
+            <button id="schematic-rollback-native" class="button secondary" disabled>Rollback Commit</button>
+          </div>
+        </div>
+        <div class="schematic-body">
+          <div class="schematic-canvas-shell">
+            <div class="schematic-canvas-toolbar">
+              <span>50 mil model grid <i>·</i> scroll to zoom at pointer <i>·</i> Space + drag to pan</span>
+              <label class="schematic-view-toggle"><input id="schematic-grid-visible" type="checkbox" checked> Grid</label>
+              <label class="schematic-view-toggle"><input id="schematic-snap" type="checkbox" checked> Snap</label>
+              <label class="schematic-view-toggle"><input id="schematic-pin-numbers" type="checkbox"> Pin numbers</label>
+              <label class="schematic-view-toggle"><input id="schematic-pin-names" type="checkbox"> Pin names</label>
+              <div><button id="schematic-zoom-out" class="icon-button" aria-label="Zoom out" title="Zoom out">−</button><button id="schematic-zoom-in" class="icon-button" aria-label="Zoom in" title="Zoom in">＋</button><button id="schematic-fit" class="button secondary" title="Fit to schematic (F)">Fit</button><button id="schematic-reset-view" class="button secondary" title="Reset view">Reset</button></div>
+            </div>
+            <div id="schematic-stage" class="schematic-stage" aria-label="Interactive schematic canvas"></div>
+            <div id="schematic-status" class="schematic-status" role="status">Loading schematic…</div>
+          </div>
+          <aside class="schematic-inspector"><div class="eyebrow">INSPECTOR</div><h2>Selection &amp; connection</h2><div id="schematic-revision-state" class="revision-state" data-state="synced">Imported native schematic · in sync</div><div id="schematic-properties" class="schematic-properties"><div class="schematic-property-empty">Select a component, pin, or wire to inspect it.</div></div><section class="net-panel"><div class="schematic-property-label">CONNECTED NET</div><div id="schematic-net-info" class="schematic-property-empty">Click a wire or pin to highlight its complete net.</div></section><div class="schematic-engine-note"><strong id="schematic-sync-state">Edits are staged before KiCad changes.</strong><p>Save creates a recoverable DemonX revision. Validate &amp; Stage exports a separate native candidate, compares original and candidate netlists, and runs KiCad ERC. The original stays unchanged until you review and explicitly approve commit. Edits outside the supported symbol/wire/label subset are refused.</p><p id="schematic-source-hash" class="muted">Native revision hash: checking…</p></div></aside>
+        </div>
+      </section>
+      <footer><span>Development preview 0.5.0 <i>•</i> KiCad is installed separately <span id="dev-build-id"></span></span><span>AI suggestions are not engineering verification.</span></footer>
     </main>
   </div>
   <dialog id="settings-dialog" class="modal settings-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2></div><button class="close-button" aria-label="Close">×</button></div><section class="setting-row"><div><strong>Appearance</strong><p>Choose the theme for this computer.</p></div><button id="settings-theme-toggle" class="button secondary" type="button">Toggle theme</button></section><section class="setting-row tool-settings"><div><strong>Native tools</strong><p id="settings-tools">Checking installed tools…</p><p class="setting-note">KiCad 10.0.7 is the verified version. Circuit does not install tools or modify system settings.</p></div><div class="setting-actions"><button id="select-kicad" class="button secondary" type="button">Select KiCad folder…</button><button id="select-esphome" class="button secondary" type="button">Select ESPHome CLI…</button></div></section><section class="setting-row"><div><strong>Brand assets</strong><p>Official DemonX Circuit artwork. Other DemonX Suite artwork remains available in the repository assets folder.</p></div><span class="tag">LOCAL</span></section><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="result-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div id="result-kicker" class="eyebrow">OPERATION RESULT</div><h2 id="result-title">Result</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="result-message"></p><pre id="result-output" class="output"></pre><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
   <dialog id="yaml-dialog" class="modal yaml-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">REVIEW BEFORE SAVING</div><h2>ESPHome YAML preview</h2></div><button class="close-button" aria-label="Close">×</button></div><div id="yaml-status" class="notice"></div><textarea id="yaml-content" spellcheck="false" aria-label="Generated ESPHome YAML"></textarea><div class="modal-actions"><button id="yaml-cancel" class="button secondary" type="button">Cancel</button><button id="yaml-save" class="button primary" type="button">Save as…</button></div></form></dialog>
   <dialog id="replace-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SAFE FILE REPLACEMENT</div><h2>Review the changes</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="replace-message">The original file is unchanged. Review the existing and proposed YAML, then approve replacement.</p><div class="compare-grid"><section><h3>Existing file</h3><pre id="existing-yaml" class="output"></pre></section><section><h3>Proposed file</h3><pre id="proposed-yaml" class="output"></pre></section></div><h3>Line comparison</h3><pre id="yaml-diff" class="output diff-output"></pre><div class="modal-actions"><button id="replace-cancel" class="button secondary" type="button">Keep existing</button><button id="replace-confirm" class="button danger" type="button">Approve replacement</button></div></form></dialog>
+  <dialog id="component-picker" class="modal component-picker"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">PROJECT LIBRARY</div><h2>Add a component</h2></div><button class="close-button" aria-label="Close">×</button></div><input id="component-search" class="component-search" type="search" placeholder="Search resistors, LEDs, connectors…" autocomplete="off"><div id="component-choices" class="component-choices"></div><div class="modal-actions"><button class="button secondary">Cancel</button></div></form></dialog>
+  <dialog id="schematic-shortcuts-dialog" class="modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">SCHEMATIC EDITOR</div><h2>Keyboard shortcuts</h2></div><button class="close-button" aria-label="Close">×</button></div><dl class="shortcut-list"><dt>V</dt><dd>Select tool</dd><dt>A</dt><dd>Choose component and place once</dd><dt>W</dt><dd>Wire tool</dd><dt>R</dt><dd>Rotate selection or placement preview</dd><dt>Delete</dt><dd>Delete selected component or connection</dd><dt>Ctrl+Z</dt><dd>Undo</dd><dt>Ctrl+Y / Ctrl+Shift+Z</dt><dd>Redo</dd><dt>Esc</dt><dd>Cancel current operation and clear selection</dd><dt>F</dt><dd>Fit schematic to view</dd><dt>Space + drag</dt><dd>Pan canvas</dd><dt>Mouse wheel</dt><dd>Zoom around pointer</dd></dl><div class="modal-actions"><button class="button primary">Done</button></div></form></dialog>
+  <dialog id="native-commit-dialog" class="modal compare-modal"><form method="dialog"><div class="modal-head"><div><div class="eyebrow">NATIVE SCHEMATIC APPROVAL</div><h2>Commit validated candidate?</h2></div><button class="close-button" aria-label="Close">×</button></div><p id="native-commit-message">Review the exact source and candidate hashes. A non-overwriting backup will be created before the KiCad file is replaced.</p><pre id="native-commit-details" class="output"></pre><div class="modal-actions"><button id="native-commit-cancel" class="button secondary" type="button">Keep original</button><button id="native-commit-approve" class="button danger" type="button">Approve &amp; Commit</button></div></form></dialog>
+  <section id="pcb-workspace" class="pcb-workspace hidden" aria-label="Mechanical PCB workspace">
+    <div class="section-head"><div><div class="eyebrow accent">MECHANICAL REVIEW · LOW VOLTAGE ONLY</div><h2>Board placement workspace</h2></div><button id="pcb-close" class="button secondary">Close workspace</button></div>
+    <p class="notice">PROVISIONAL — fabrication blocked for Project 001. Courtyard checks are 2D; enclosure depth and module fit require measurement.</p>
+    <p id="pcb-revision"></p>
+    <div class="pcb-toolbar"><label>Layer <select id="pcb-layer"><option value="all">Both, front projection</option><option value="F.Cu">Front (F.Cu)</option><option value="B.Cu">Back (B.Cu)</option></select></label><label><input type="checkbox" id="pcb-references" checked> Enclosure reference geometry</label><button id="pcb-save" class="button primary">Save new PCB revision</button></div>
+    <p id="pcb-error" role="status"></p>
+    <details id="pcb-assembly-details"><summary>Assembly depth and connector engagement</summary><div id="pcb-assembly"></div></details>
+    <div class="pcb-grid"><svg id="pcb-canvas" role="img" aria-label="PCB placement drawing in millimetres"></svg><div class="pcb-sidebar"><p id="pcb-reference-note"></p><h3>Placement · mm and degrees</h3><p>Green: front · Blue: back · Gold: board edge. Module envelopes have no electrical pads.</p><div class="pcb-table-scroll"><table class="pcb-table"><thead><tr><th>Item</th><th>X</th><th>Y</th><th>°</th><th>Layer</th></tr></thead><tbody id="pcb-placements"></tbody></table></div><h3>Fit diagnostics and missing measurements</h3><div id="pcb-issues"></div></div></div>
+  </section>
   <script src="./dist/renderer.js"></script>
 </body>
 </html>

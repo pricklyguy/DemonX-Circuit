@@ -2,7 +2,7 @@ name: DemonX Circuit Windows development preview
 
 on:
   push:
-    branches: [codex/demonx-circuit-foundation]
+    branches: [codex/demonx-circuit-foundation, codex/demonx-circuit-schematic-editor]
     paths:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
@@ -14,6 +14,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "prototype/**"
+      - "examples/native-smoke/led-resistor.dxcircuit.json"
       - "examples/esp32-sensor/**"
   workflow_dispatch:
 
@@ -62,6 +63,25 @@ jobs:
           name: kicad-native-smoke-10.0.7
           path: build/native-fixture
 
+      - name: Test the DemonX schematic semantic model
+        run: npm run test:schematic-model
+
+      - name: Test immutable native PCB mechanical revisions
+        run: npm run test:pcb-mechanical
+
+      - name: Test assembly depth and engagement calculations
+        run: npm run test:assembly-stackup
+
+      - name: Test constrained native schematic import and export
+        env:
+          DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke
+        run: npm run test:native-roundtrip
+
+      - name: Test the official MCP SDK read-only server
+        env:
+          DEMONX_NATIVE_SMOKE_FIXTURE: ${{ github.workspace }}/build/native-fixture/examples/native-smoke/DX_LED_Smoke
+        run: npm run test:mcp
+
       - name: Provision KiCad 10.0.7 on the disposable Windows runner
         shell: pwsh
         run: |
@@ -105,6 +125,8 @@ jobs:
           New-Item -ItemType Directory -Force "$appRoot/desktop/dist" | Out-Null
           New-Item -ItemType Directory -Force "$appRoot/desktop" | Out-Null
           Copy-Item desktop/main.cjs "$appRoot/desktop/main.cjs" -Force
+          Copy-Item desktop/kicad-schematic-adapter.cjs "$appRoot/desktop/kicad-schematic-adapter.cjs" -Force
+          Copy-Item desktop/pcb-mechanical.cjs "$appRoot/desktop/pcb-mechanical.cjs" -Force
           Copy-Item desktop/index.html,desktop/style.css "$appRoot/desktop/" -Force
           Copy-Item desktop/dist/* "$appRoot/desktop/dist/" -Recurse -Force
           Copy-Item desktop/assets "$appRoot/desktop/assets" -Recurse -Force
@@ -173,10 +195,28 @@ jobs:
           if ($exeCandidates.Count -ne 1) { throw "Expected one packaged executable, found $($exeCandidates.Count)." }
           node desktop/acceptance.mjs $exeCandidates[0].FullName (Join-Path $env:RUNNER_TEMP 'desktop-acceptance')
 
+      - name: Determine whether provenance attestation is safe to create
+        id: provenance_gate
+        if: always()
+        shell: pwsh
+        run: |
+          $eligible = $false
+          $reason = 'Package, integrity report, release manifest, or clean Defender result is missing.'
+          $zip = Get-ChildItem -LiteralPath build -Filter 'DemonX-Circuit-Windows-Preview-*.zip' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          $releaseManifest = Get-ChildItem -LiteralPath build -Filter 'DemonX-Circuit-Windows-Preview-*.release-manifest.json' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($zip -and $releaseManifest -and (Test-Path 'build-package-integrity.json') -and (Test-Path 'build/security/defender-scan.json')) {
+            $integrity = Get-Content 'build-package-integrity.json' -Raw | ConvertFrom-Json
+            $defender = Get-Content 'build/security/defender-scan.json' -Raw | ConvertFrom-Json
+            if ($integrity.status -eq 'PASS' -and $defender.status -eq 'PASS') { $eligible = $true; $reason = 'Package integrity passed and Microsoft Defender reported no threats; provenance is independent of GUI acceptance.' }
+          }
+          "eligible=$($eligible.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "reason=$reason" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Output "Attestation eligible=$eligible; $reason"
+
       - name: Attest the portable ZIP provenance
         id: provenance
         continue-on-error: true
-        if: success()
+        if: always() && steps.provenance_gate.outputs.eligible == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: build/DemonX-Circuit-Windows-Preview-*.zip
@@ -186,8 +226,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build/security | Out-Null
-          $status = if ('${{ steps.provenance.outcome }}' -eq 'success') { 'PASS' } else { 'INCONCLUSIVE' }
-          $reason = if ($status -eq 'PASS') { 'GitHub actions/attest created an artifact provenance attestation.' } else { 'Attestation was unavailable or rejected by repository visibility/permissions; see workflow logs.' }
+          $status = if ('${{ steps.provenance.outcome }}' -eq 'success') { 'PASS' } elseif ('${{ steps.provenance_gate.outputs.eligible }}' -ne 'true') { 'NOT ATTESTED' } else { 'INCONCLUSIVE' }
+          $reason = if ($status -eq 'PASS') { 'GitHub actions/attest created an artifact provenance attestation. GUI acceptance status is reported separately.' } elseif ($status -eq 'NOT ATTESTED') { '${{ steps.provenance_gate.outputs.reason }}' } else { 'Attestation was eligible but unavailable or rejected by repository visibility/permissions; see workflow logs.' }
           @{ status = $status; action = 'actions/attest@v4.2.2'; subject = 'portable Windows ZIP'; reason = $reason } | ConvertTo-Json | Set-Content build/security/provenance-status.json -Encoding utf8
 
       - name: Upload Windows development preview and security evidence

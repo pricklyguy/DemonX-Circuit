@@ -1,0 +1,57 @@
+{
+  "format": "demonx-schematic",
+  "formatVersion": 1,
+  "name": "LED and resistor starter",
+  "gridMm": 1.27,
+  "components": [
+    {
+      "id": "component-input-01",
+      "libId": "Connector_Generic:Conn_01x02",
+      "reference": "J1",
+      "value": "5V INPUT",
+      "x": 40,
+      "y": 40,
+      "rotation": 0,
+      "pins": [
+        { "number": "1", "name": "Pin 1", "x": -4, "y": 0, "electricalType": "passive" },
+        { "number": "2", "name": "Pin 2", "x": -4, "y": 2, "electricalType": "passive" }
+      ]
+    },
+    {
+      "id": "component-resistor-01",
+      "libId": "Device:R",
+      "reference": "R1",
+      "value": "330",
+      "x": 50,
+      "y": 40,
+      "rotation": 0,
+      "pins": [
+        { "number": "1", "name": "1", "x": 0, "y": -3, "electricalType": "passive" },
+        { "number": "2", "name": "2", "x": 0, "y": 3, "electricalType": "passive" }
+      ]
+    },
+    {
+      "id": "component-led-01",
+      "libId": "Device:LED",
+      "reference": "D1",
+      "value": "RED LED",
+      "x": 60,
+      "y": 40,
+      "rotation": 0,
+      "pins": [
+        { "number": "1", "name": "K", "x": -3, "y": 0, "electricalType": "passive" },
+        { "number": "2", "name": "A", "x": 3, "y": 0, "electricalType": "passive" }
+      ]
+    }
+  ],
+  "junctions": [],
+  "wires": [
+    { "id": "wire-input-resistor", "fromNodeId": "pin:component-input-01:1", "toNodeId": "pin:component-resistor-01:1" },
+    { "id": "wire-resistor-led", "fromNodeId": "pin:component-resistor-01:2", "toNodeId": "pin:component-led-01:1" },
+    { "id": "wire-led-return", "fromNodeId": "pin:component-led-01:2", "toNodeId": "pin:component-input-01:2" }
+  ],
+  "labels": [
+    { "id": "label-5v-in", "nodeId": "pin:component-input-01:1", "name": "5V_IN" },
+    { "id": "label-gnd", "nodeId": "pin:component-input-01:2", "name": "GND" }
+  ]
+}

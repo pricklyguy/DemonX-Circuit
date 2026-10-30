@@ -6,6 +6,15 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const { findSupplyShorts, routeSchematicWires, validateSchematic } = require('./dist/schematic-model.js');
+const schematicAdapter = require('./kicad-schematic-adapter.cjs');
+const pcbMechanical = require('./pcb-mechanical.cjs');
+
+// A development launch gets its own user-data directory, so testing the local
+// build cannot overwrite the normal preview's preferences or recent projects.
+if (process.env.DEMONX_CIRCUIT_DEV_USER_DATA) {
+  app.setPath('userData', path.resolve(process.env.DEMONX_CIRCUIT_DEV_USER_DATA));
+}
 
 const acceptanceRoot = process.env.DEMONX_CIRCUIT_ACCEPTANCE_ROOT;
 if (acceptanceRoot) {
@@ -138,6 +147,53 @@ function safeInside(root, rel) {
   if (!resolved.startsWith(root + path.sep) && resolved !== root) throw new Error('Project manifest path escapes its project folder.');
   return resolved;
 }
+async function latestSchematicRevision(root) {
+  const directory = safeInside(root, 'schematic-circuit/revisions');
+  let entries;
+  try { entries = await fs.readdir(directory); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  const revisions = entries.filter(name => /^\d{6}-.+\.json$/i.test(name)).sort();
+  if (!revisions.length) return null;
+  const revision = revisions.at(-1);
+  const file = safeInside(root, `schematic-circuit/revisions/${revision}`);
+  const text = await fs.readFile(file, 'utf8');
+  if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) throw new Error('The latest DemonX schematic revision is larger than the 2 MB safety limit.');
+  return { model: JSON.parse(text), revision, path: file };
+}
+async function storeSchematicRevision(root, model) {
+  const issues = validateSchematic(model);
+  if (issues.length) throw new Error(`Schematic validation failed; no revision was saved. ${issues.join(' ')}`);
+  const serialized = `${JSON.stringify(model, null, 2)}\n`;
+  if (Buffer.byteLength(serialized, 'utf8') > 2 * 1024 * 1024) throw new Error('Schematic exceeds the 2 MB local editor safety limit.');
+  const directory = safeInside(root, 'schematic-circuit/revisions');
+  await fs.mkdir(directory, { recursive: true });
+  const entries = await fs.readdir(directory);
+  const digest = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 12);
+  let revisionNumber = entries.reduce((highest, name) => { const match = /^(\d{6})-.+\.json$/i.exec(name); return match ? Math.max(highest, Number(match[1])) : highest; }, 0) + 1;
+  let revision, destination;
+  for (;;) {
+    revision = `${String(revisionNumber).padStart(6, '0')}-${digest}`;
+    destination = safeInside(root, `schematic-circuit/revisions/${revision}.json`);
+    try { await fs.writeFile(destination, serialized, { flag: 'wx' }); break; }
+    catch (error) { if (error.code !== 'EEXIST') throw error; revisionNumber++; }
+  }
+  return { revision, path: destination, message: 'Saved as a new immutable project revision. Native KiCad files remain unchanged until a validated candidate is explicitly approved.' };
+}
+async function nativeSyncState(root, schematicPath, existingModel) {
+  if (!schematicPath) return { status: 'NOT_TESTED', nativeSha256: null, editorRevision: null, reason: 'No native schematic is listed in the project.' };
+  try {
+    const source = await fs.readFile(schematicPath, 'utf8');
+    const nativeSha256 = schematicAdapter.digest(source);
+    const revision = await latestSchematicRevision(root);
+    if (!revision) return { status: 'NOT_IMPORTED', nativeSha256, editorRevision: null, reason: 'Native schematic has not been imported into the DemonX editor.' };
+    const model = existingModel || revision.model;
+    if (!model.nativeSync?.sourceSha256) return { status: 'UNSYNCHRONIZED', nativeSha256, editorRevision: revision.revision, reason: 'Editor model has no native source revision association.' };
+    if (model.nativeSync.sourceSha256 !== nativeSha256) return { status: 'EXTERNAL_CONFLICT', nativeSha256, editorRevision: revision.revision, reason: 'The native schematic changed after this DemonX revision was imported.' };
+    const nativeModel = schematicAdapter.importKiCadSchematic(source);
+    const same = schematicAdapter.sameSemantic(model, nativeModel);
+    return { status: same ? 'IN_SYNC' : 'UNSYNCHRONIZED', nativeSha256, editorRevision: revision.revision,
+      reason: same ? 'DemonX and KiCad resolve to the same saved schematic revision.' : 'DemonX editor changes are saved locally but not committed to KiCad.' };
+  } catch (error) { return { status: 'UNSUPPORTED', nativeSha256: null, editorRevision: null, reason: error.message || String(error) }; }
+}
 async function summarize(root) {
   const manifestPath = path.join(root, 'project.json');
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
@@ -152,7 +208,7 @@ async function summarize(root) {
     if (rel.endsWith('.kicad_sch')) schematic = full;
     if (rel.endsWith('.kicad_pcb')) pcb = full;
   }
-  const components = (manifest.hardware?.components || []).map(c => ({ ref: c.ref, value: c.value, kind: c.kind }));
+  let components = (manifest.hardware?.components || []).map(c => ({ ref: c.ref, value: c.value, kind: c.kind }));
   const libraries = [];
   if (Array.isArray(manifest.libraries)) {
     for (const entry of manifest.libraries) {
@@ -177,10 +233,15 @@ async function summarize(root) {
       }
     } catch {}
   }
+  const latest = await latestSchematicRevision(root);
+  const sync = await nativeSyncState(root, schematic, latest?.model);
+  if (latest?.model?.components) components = latest.model.components.map(item => ({ ref: item.reference, value: item.value, kind: item.libId }));
   return { name: manifest.name || path.basename(root), projectId: manifest.projectId || '', revision: manifest.revision || '', root,
     nativeStatus: `${manifest.native?.status || 'No native status recorded.'}${missingNative.length ? ` Missing from this project folder: ${missingNative.join(', ')}.` : ''}`, components, libraries,
+    nativeSyncStatus: sync.status, nativeSchematicSha256: sync.nativeSha256, editorRevision: sync.editorRevision, nativeSyncReason: sync.reason,
     capabilities: { esphome: manifest.firmware?.target === 'esphome' && !!manifest.hardware?.controller?.esphomeVariant && !!manifest.hardware?.pinMap },
-    files: { schematic, pcb } };
+    manufacturingBlocked: manifest.manufacturing?.status === 'blocked-mechanical-review',
+    files: { schematic, pcb: pcb ? await pcbMechanical.latest(root, pcb) : undefined } };
 }
 async function selectProject() {
   const picked = await dialog.showOpenDialog(win, { title: 'Open DemonX Circuit Project', properties: ['openDirectory'] });
@@ -199,8 +260,41 @@ function register(channel, handler) {
   });
 }
 
+async function boardWorkspace() {
+ const project=ensureProject();
+ if(!project.files.pcb) throw new Error('This project has no native PCB.');
+ const file=await pcbMechanical.latest(project.root, project.files.pcb);
+ const board=pcbMechanical.inspect(await fs.readFile(file,'utf8'));
+ let constraints={};
+ try { const raw=await fs.readFile(safeInside(project.root,'mechanical/constraints.json'),'utf8'); if(raw.length>2*1024*1024)throw new Error('Mechanical metadata too large.');constraints=JSON.parse(raw); }
+ catch(error){if(error.code!=='ENOENT')throw error;}
+ return {...board,path:file,constraints,issues:pcbMechanical.diagnostics(board,constraints)};
+}
+register('pcb:load', boardWorkspace);
+let pcbSaveBusy=false;
+register('pcb:save',async (expectedSha,placements)=>{
+ if(pcbSaveBusy)throw new Error('A PCB revision save is already running.');
+ pcbSaveBusy=true;
+ try {
+  const project=ensureProject();
+  if(!project.files.pcb)throw new Error('No PCB open.');
+  await pcbMechanical.save(project.root,project.files.pcb,expectedSha,placements);
+  if (activeProject?.root !== project.root) throw new Error('Revision saved to the original project; the active project changed during save. Reopen it to inspect the saved revision.');
+  activeProject=await summarize(project.root);
+  return boardWorkspace();
+ } finally {pcbSaveBusy=false;}
+});
+
 register('env:get', async () => {
-  return getNativeTools();
+  return {
+    ...await getNativeTools(),
+    development: process.env.DEMONX_CIRCUIT_DEV_MODE === '1' ? {
+      branch: process.env.DEMONX_CIRCUIT_DEV_BRANCH || 'unknown',
+      commit: process.env.DEMONX_CIRCUIT_DEV_COMMIT || 'unknown',
+      tree: process.env.DEMONX_CIRCUIT_DEV_TREE || 'unknown',
+      logPath: process.env.DEMONX_CIRCUIT_DEV_LOG || null
+    } : null
+  };
 });
 register('native-tools:select-kicad', async () => {
   const picked = await dialog.showOpenDialog(win, { title: 'Select KiCad 10.0.7 installation folder', properties: ['openDirectory'] });
@@ -252,6 +346,18 @@ register('project:new', async () => {
   await fs.mkdir(path.join(base, 'libraries', 'DemonX_Project.pretty'), { recursive: true });
   await fs.mkdir(path.join(base, 'reports'), { recursive: true });
   await fs.mkdir(path.join(base, 'manufacturing'), { recursive: true });
+  const schematicRevisionDir = path.join(base, 'schematic-circuit', 'revisions');
+  await fs.mkdir(schematicRevisionDir, { recursive: true });
+  const nativeSchematicFile = path.join(base, `${projectName}.kicad_sch`);
+  try {
+    const nativeText = await fs.readFile(nativeSchematicFile, 'utf8');
+    const imported = schematicAdapter.importKiCadSchematic(nativeText);
+    imported.name = 'LED and resistor starter';
+    await fs.writeFile(path.join(schematicRevisionDir, '000001-starter.json'), `${JSON.stringify(imported, null, 2)}\n`, { flag: 'wx' });
+  } catch (error) {
+    await fs.rm(base, { recursive: true, force: true });
+    throw new Error(`The native KiCad starter could not be imported safely; no project was retained. ${error.message}`);
+  }
   const installTemplate = path.join(tools.kicadInstallDir, 'share', 'kicad', 'template');
   for (const table of ['sym-lib-table', 'fp-lib-table']) {
     const tableSource = path.join(installTemplate, table);
@@ -279,7 +385,7 @@ register('project:new', async () => {
     }
   }
   const projectId = `dx-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const manifest = { format: 'demonx-project', formatVersion: '0.2.0', projectId, name: projectName, revision: '0.1.0', libraries: [{ id: 'DemonX_Project', path: 'libraries/DemonX_Project.kicad_sym', footprints: 'libraries/DemonX_Project.pretty' }], native: { engine: 'kicad', engineVersion: tools.kicadVersion, files: [`${projectName}.kicad_pro`, `${projectName}.kicad_sch`, `${projectName}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'], status: 'Native LED/resistor starter project created and ERC/DRC checked by KiCad 10.0.7.' }, hardware: { components: [{ ref: 'J1', value: '5V INPUT', kind: 'connector' }, { ref: 'R1', value: '330', kind: 'resistor' }, { ref: 'D1', value: 'RED LED', kind: 'LED' }], nets: [{ name: '5V_IN' }, { name: 'GND' }], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
+  const manifest = { format: 'demonx-project', formatVersion: '0.2.0', projectId, name: projectName, revision: '0.1.0', editableSchematic: { format: 'demonx-schematic', revisions: 'schematic-circuit/revisions' }, libraries: [{ id: 'DemonX_Project', path: 'libraries/DemonX_Project.kicad_sym', footprints: 'libraries/DemonX_Project.pretty' }], native: { engine: 'kicad', engineVersion: tools.kicadVersion, files: [`${projectName}.kicad_pro`, `${projectName}.kicad_sch`, `${projectName}.kicad_pcb`, 'sym-lib-table', 'fp-lib-table'], status: 'Native LED/resistor starter project created and ERC/DRC checked by KiCad 10.0.7.' }, hardware: { components: [{ ref: 'J1', value: '5V INPUT', kind: 'connector' }, { ref: 'R1', value: '330', kind: 'resistor' }, { ref: 'D1', value: 'RED LED', kind: 'LED' }], nets: [{ name: '5V_IN' }, { name: 'GND' }], pinMap: {} }, manufacturing: { status: 'not-created', coordinateUnits: 'mm', origin: 'KiCad auxiliary origin' } };
   await fs.writeFile(path.join(base, 'project.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
   activeProject = await summarize(base);
   await rememberProject(activeProject);
@@ -298,6 +404,197 @@ register('project:open-recent', async projectId => {
   return summary;
 });
 register('project:inspect', async () => activeProject ? summarize(activeProject.root) : null);
+register('schematic-model:load', async () => {
+  const project = ensureProject();
+  const latest = await latestSchematicRevision(project.root);
+  if (latest) return latest.model;
+  if (!project.files.schematic) return null;
+  const nativeText = await fs.readFile(project.files.schematic, 'utf8');
+  const imported = schematicAdapter.importKiCadSchematic(nativeText);
+  imported.name = project.name;
+  const saved = await storeSchematicRevision(project.root, imported);
+  console.info(`[Circuit native import] ${saved.revision} from ${schematicAdapter.digest(nativeText)}`);
+  return imported;
+});
+register('schematic-model:save', async model => {
+  const project = ensureProject();
+  if (!model || typeof model !== 'object' || Array.isArray(model) || model.format !== 'demonx-schematic' || model.formatVersion !== 1 || model.gridMm !== 1.27 || !Array.isArray(model.components) || !Array.isArray(model.junctions) || !Array.isArray(model.wires) || !Array.isArray(model.labels)) throw new Error('Rejected malformed or unsupported DemonX schematic data.');
+  if (model.components.length > 1000 || model.junctions.length > 10000 || model.wires.length > 20000 || model.labels.length > 10000) throw new Error('Schematic exceeds the local editor safety limits.');
+  const validationIssues = validateSchematic(model);
+  if (validationIssues.length) throw new Error(`Schematic validation failed; no revision was saved. ${validationIssues.join(' ')}`);
+  return storeSchematicRevision(project.root, model);
+});
+async function executeNetlist(cli, schematicPath, outputPath, cwd) {
+  const result = await run(cli, ['sch', 'export', 'netlist', '--format', 'kicadxml', '--output', outputPath, schematicPath], cwd);
+  let netlist = '';
+  try { netlist = await fs.readFile(outputPath, 'utf8'); } catch {}
+  if (result.code !== 0 || !netlist) return { exitCode: result.code, output: result.output, groups: null };
+  return { exitCode: result.code, output: result.output, groups: schematicAdapter.parseKicadNetlist(netlist) };
+}
+async function stageNativeSchematic() {
+  const project = ensureProject();
+  if (!project.files.schematic) return result('NOT TESTED', 'Validate & Stage for KiCad', 'This project has no native schematic.');
+  const tools = await getNativeTools();
+  if (!tools.kicadCli || tools.kicadVersion !== SUPPORTED_KICAD_VERSION) return result('NOT TESTED', 'Validate & Stage for KiCad', `KiCad ${SUPPORTED_KICAD_VERSION} CLI is required. ${tools.compatibilityMessage || tools.kicadCliError || 'Select the supported installation in Native Tools settings.'}`);
+  const latest = await latestSchematicRevision(project.root);
+  if (!latest) return result('NOT TESTED', 'Validate & Stage for KiCad', 'Import the native schematic into DemonX before staging edits.');
+  const sourceText = await fs.readFile(project.files.schematic, 'utf8');
+  const sourceSha256 = schematicAdapter.digest(sourceText);
+  if (latest.model.nativeSync?.sourceSha256 !== sourceSha256) return result('FAIL', 'Native schematic conflict', 'The native KiCad file changed after import. Reopen the project and reimport before staging; no candidate was written.', { output: `Expected source SHA-256 ${latest.model.nativeSync?.sourceSha256 || '(not recorded)'}\nCurrent source SHA-256 ${sourceSha256}` });
+  const generated = schematicAdapter.exportKiCadCandidate(sourceText, latest.model);
+  const stageId = `${Date.now().toString(36)}-${crypto.randomBytes(5).toString('hex')}`;
+  const stageDir = safeInside(project.root, 'schematic-circuit/staged');
+  const reportDir = safeInside(project.root, `reports/schematic-roundtrip/${stageId}`);
+  await fs.mkdir(stageDir, { recursive: true });
+  await fs.mkdir(reportDir, { recursive: true });
+  // KiCad CLI resolves project library tables relative to the candidate file's
+  // directory. Give the isolated candidate a matching project file and the
+  // project's tables/libraries so ERC sees the same native project context.
+  const sourceProjectName = path.basename(project.files.schematic, '.kicad_sch');
+  await fs.copyFile(path.join(project.root, `${sourceProjectName}.kicad_pro`), path.join(reportDir, 'candidate.kicad_pro'));
+  for (const table of ['sym-lib-table', 'fp-lib-table']) {
+    try { await fs.copyFile(path.join(project.root, table), path.join(reportDir, table)); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  try { await fs.cp(path.join(project.root, 'libraries'), path.join(reportDir, 'libraries'), { recursive: true, errorOnExist: true, force: false }); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const candidateRelative = `reports/schematic-roundtrip/${stageId}/candidate.kicad_sch`;
+  const candidatePath = safeInside(project.root, candidateRelative);
+  const reportFiles = ['original.net', 'candidate.net', 'candidate-erc.rpt', 'validation.json'].map(name => safeInside(project.root, `reports/schematic-roundtrip/${stageId}/${name}`));
+  await fs.writeFile(candidatePath, generated.text, { flag: 'wx' });
+  const originalModel = schematicAdapter.importKiCadSchematic(sourceText);
+  const originalNetlist = await executeNetlist(tools.kicadCli, project.files.schematic, reportFiles[0], project.root);
+  const candidateNetlist = await executeNetlist(tools.kicadCli, candidatePath, reportFiles[1], project.root);
+  const originalComparison = originalNetlist.groups ? schematicAdapter.compareNetGroups(schematicAdapter.netGroups(originalModel), originalNetlist.groups) : null;
+  const candidateComparison = candidateNetlist.groups ? schematicAdapter.compareNetGroups(schematicAdapter.netGroups(latest.model), candidateNetlist.groups) : null;
+  const ercArgs = ['sch', 'erc', '--severity-all', '--exit-code-violations', '--output', reportFiles[2], candidatePath];
+  const erc = await run(tools.kicadCli, ercArgs, project.root);
+  let ercText = erc.output;
+  try { ercText = `${ercText}\n${await fs.readFile(reportFiles[2], 'utf8')}`.trim(); } catch {}
+  const passed = originalComparison?.matches === true && candidateComparison?.matches === true && erc.code === 0;
+  const stageRecord = { stageId, candidate: candidateRelative, sourceRelative: path.relative(project.root, project.files.schematic).replaceAll(path.sep, '/'),
+    sourceSha256, candidateSha256: generated.sha256, modelRevision: latest.revision, createdAt: new Date().toISOString(), validated: passed,
+    validation: { status: passed ? 'PASS' : 'FAIL', tool: 'KiCad CLI 10.0.7', platform: process.platform, commands: [
+      { argv: ['sch', 'export', 'netlist', '--format', 'kicadxml', '--output', reportFiles[0], project.files.schematic], exitCode: originalNetlist.exitCode },
+      { argv: ['sch', 'export', 'netlist', '--format', 'kicadxml', '--output', reportFiles[1], candidatePath], exitCode: candidateNetlist.exitCode },
+      { argv: ['sch', 'erc', '--severity-all', '--exit-code-violations', '--output', reportFiles[2], candidatePath], exitCode: erc.code }
+    ], originalNetlist: originalComparison, candidateNetlist: candidateComparison, erc: { exitCode: erc.code, output: ercText } } };
+  await fs.writeFile(safeInside(project.root, `schematic-circuit/staged/${stageId}.json`), `${JSON.stringify(stageRecord, null, 2)}\n`, { flag: 'wx' });
+  await fs.writeFile(reportFiles[3], `${JSON.stringify(stageRecord.validation, null, 2)}\n`, { flag: 'wx' });
+  return result(passed ? 'PASS' : 'FAIL', 'Validate & Stage for KiCad', passed ? 'The staged native schematic matches the DemonX model, both native netlists were compared, and candidate ERC passed. The original is unchanged; review and approve separately to commit.' : 'Validation failed. The native source is unchanged and the staged candidate cannot be committed.', {
+    stageId, candidatePath, sourceSha256, candidateSha256: generated.sha256, modelRevision: latest.revision, validation: stageRecord.validation,
+    output: `Source SHA-256: ${sourceSha256}\nCandidate SHA-256: ${generated.sha256}\nOriginal netlist comparison: ${originalComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate netlist comparison: ${candidateComparison?.matches ? 'PASS' : 'FAIL'}\nCandidate netlist groups: ${JSON.stringify(candidateComparison)}\nCandidate ERC exit: ${erc.code}\n${ercText}`,
+    reportPaths: [candidatePath, safeInside(project.root, `schematic-circuit/staged/${stageId}.json`), ...reportFiles]
+  });
+}
+register('schematic-native:stage', async model => {
+  if (!model || typeof model !== 'object' || model.format !== 'demonx-schematic' || model.formatVersion !== 1 || model.gridMm !== 1.27) throw new Error('Rejected malformed or unsupported DemonX schematic data.');
+  const project = ensureProject();
+  const validationIssues = validateSchematic(model);
+  if (validationIssues.length) throw new Error(`Schematic validation failed; no candidate was staged. ${validationIssues.join(' ')}`);
+  const displaySafetyIssues = [...findSupplyShorts(model), ...routeSchematicWires(model).errors];
+  if (displaySafetyIssues.length) throw new Error(`Display/electrical safety validation failed; no native candidate was staged. ${displaySafetyIssues.join(' ')}`);
+  const saved = await storeSchematicRevision(project.root, model);
+  const staged = await stageNativeSchematic();
+  return { ...staged, modelRevision: saved.revision, message: `${saved.message} ${staged.message}` };
+});
+register('schematic-native:open-stage', async stageId => {
+  if (typeof stageId !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(stageId)) throw new Error('Invalid staged schematic identifier.');
+  const project = ensureProject(); const recordPath = safeInside(project.root, `schematic-circuit/staged/${stageId}.json`);
+  const record = JSON.parse(await fs.readFile(recordPath, 'utf8'));
+  if (record.validated !== true) return result('FAIL', 'Open staged schematic', 'The candidate did not pass native netlist comparison and ERC; it cannot be opened as a verified candidate.');
+  const candidate = safeInside(project.root, record.candidate);
+  if (schematicAdapter.digest(await fs.readFile(candidate, 'utf8')) !== record.candidateSha256) return result('FAIL', 'Open staged schematic', 'The staged candidate changed after validation. Validate again before opening.');
+  const tools = await getNativeTools();
+  if (!tools.eeschema) return result('NOT TESTED', 'Open staged schematic', 'KiCad graphical schematic editor is not available.');
+  return new Promise(resolve => {
+    const launched = spawn(tools.eeschema, [candidate], { cwd: project.root, detached: true, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false, shell: false });
+    let stdout = '', stderr = '', settled = false, startupTimer;
+    const append = (current, chunk) => `${current}${chunk.toString('utf8')}`.slice(-16000);
+    launched.stdout?.on('data', chunk => { stdout = append(stdout, chunk); });
+    launched.stderr?.on('data', chunk => { stderr = append(stderr, chunk); });
+    launched.once('error', error => {
+      if (settled) return; settled = true; clearTimeout(startupTimer);
+      resolve(result('FAIL', 'Open staged schematic', `KiCad could not be started: ${error.message}`, { stageId, candidatePath: candidate }));
+    });
+    launched.once('exit', (code, signal) => {
+      if (settled) return; settled = true; clearTimeout(startupTimer);
+      resolve(result('FAIL', 'Open staged schematic', `KiCad exited before remaining open (code ${code ?? 'unknown'}, signal ${signal || 'none'}).`, { stageId, candidatePath: candidate, exitCode: code, signal, stdout, stderr }));
+    });
+    launched.once('spawn', () => {
+      launched.unref();
+      startupTimer = setTimeout(() => {
+        if (settled) return; settled = true;
+        resolve(result('PASS', 'Open staged schematic', `KiCad ${tools.kicadVersion} started with staged candidate ${path.basename(candidate)} (process ${launched.pid}); the candidate remains separate from the source until explicit approval.`, { stageId, candidatePath: candidate, candidateSha256: record.candidateSha256, processId: launched.pid, stdout, stderr }));
+      }, 1500);
+    });
+  });
+});
+register('schematic-native:commit', async (stageId, approved) => {
+  if (approved !== true) return result('CANCELLED', 'Commit native schematic', 'No explicit approval was provided; the original KiCad schematic is unchanged.');
+  if (typeof stageId !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(stageId)) throw new Error('Invalid staged schematic identifier.');
+  const project = ensureProject(); const recordPath = safeInside(project.root, `schematic-circuit/staged/${stageId}.json`);
+  const record = JSON.parse(await fs.readFile(recordPath, 'utf8'));
+  if (record.validated !== true || record.validation?.status !== 'PASS') return result('FAIL', 'Commit native schematic', 'Only a staged candidate with passing native netlist comparisons and ERC may be committed.');
+  const source = safeInside(project.root, record.sourceRelative); const candidate = safeInside(project.root, record.candidate);
+  const sourceText = await fs.readFile(source, 'utf8'); const currentSourceHash = schematicAdapter.digest(sourceText);
+  if (currentSourceHash !== record.sourceSha256) return result('FAIL', 'Commit native schematic', 'The original KiCad file changed after staging. No file was replaced; reimport and validate again.', { output: `Staged source ${record.sourceSha256}\nCurrent source ${currentSourceHash}` });
+  const candidateText = await fs.readFile(candidate, 'utf8');
+  if (schematicAdapter.digest(candidateText) !== record.candidateSha256) return result('FAIL', 'Commit native schematic', 'The staged candidate changed after validation. No file was replaced.');
+  const backupDir = safeInside(project.root, 'schematic-circuit/native-backups'); await fs.mkdir(backupDir, { recursive: true });
+  const backupRelative = `schematic-circuit/native-backups/${path.basename(source, '.kicad_sch')}-${Date.now()}-${record.sourceSha256.slice(0, 12)}.kicad_sch`;
+  const backup = safeInside(project.root, backupRelative);
+  await fs.copyFile(source, backup, require('node:fs').constants.COPYFILE_EXCL);
+  if (schematicAdapter.digest(await fs.readFile(backup)) !== record.sourceSha256) return result('FAIL', 'Commit native schematic', 'The non-overwriting source backup did not match the staged source revision. No native file was replaced.', { output: `Expected backup SHA-256 ${record.sourceSha256}` });
+  const temporary = safeInside(project.root, `${record.sourceRelative}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+  try {
+    await fs.writeFile(temporary, candidateText, { flag: 'wx' });
+    if (schematicAdapter.digest(await fs.readFile(source, 'utf8')) !== record.sourceSha256) throw new Error('The native source changed during approval; the staged candidate was not committed.');
+    await fs.rename(temporary, source);
+  } catch (error) {
+    try { await fs.rm(temporary, { force: true }); } catch {}
+    throw error;
+  }
+  const committedModel = schematicAdapter.importKiCadSchematic(candidateText);
+  committedModel.name = project.name;
+  await storeSchematicRevision(project.root, committedModel);
+  record.committed = true; record.backup = backupRelative; record.committedAt = new Date().toISOString();
+  await fs.writeFile(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  const manifestPath = safeInside(project.root, 'project.json');
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  manifest.native.status = `KiCad schematic committed from DemonX stage ${stageId}; source SHA-256 ${record.candidateSha256}; backup ${backupRelative}.`;
+  const manifestTemp = `${manifestPath}.${crypto.randomBytes(5).toString('hex')}.tmp`;
+  await fs.writeFile(manifestTemp, `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' }); await fs.rename(manifestTemp, manifestPath);
+  activeProject = await summarize(project.root); win.webContents.send('project:changed', activeProject);
+  return result('PASS', 'Commit native schematic', 'The validated KiCad candidate is now the native schematic. A non-overwriting backup was retained for rollback.', { backupPath: backup, sourceSha256: record.candidateSha256, stageId });
+});
+register('schematic-native:rollback', async (stageId, approved) => {
+  if (approved !== true) return result('CANCELLED', 'Rollback native schematic', 'No explicit rollback approval was provided.');
+  if (typeof stageId !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(stageId)) throw new Error('Invalid staged schematic identifier.');
+  const project = ensureProject(); const recordPath = safeInside(project.root, `schematic-circuit/staged/${stageId}.json`);
+  const record = JSON.parse(await fs.readFile(recordPath, 'utf8'));
+  if (record.committed !== true || !record.backup) return result('FAIL', 'Rollback native schematic', 'No committed backup is associated with this staged candidate.');
+  const source = safeInside(project.root, record.sourceRelative); const current = await fs.readFile(source, 'utf8');
+  if (schematicAdapter.digest(current) !== record.candidateSha256) return result('FAIL', 'Rollback native schematic', 'The committed schematic changed externally after commit. Reimport it before attempting rollback.');
+  const backup = safeInside(project.root, record.backup); const backupText = await fs.readFile(backup, 'utf8');
+  if (schematicAdapter.digest(backupText) !== record.sourceSha256) return result('FAIL', 'Rollback native schematic', 'Backup hash does not match the source revision; refusing rollback.');
+  const rollbackBackup = safeInside(project.root, `schematic-circuit/native-backups/${path.basename(source, '.kicad_sch')}-before-rollback-${Date.now()}-${record.candidateSha256.slice(0, 12)}.kicad_sch`);
+  await fs.copyFile(source, rollbackBackup, require('node:fs').constants.COPYFILE_EXCL);
+  const temp = safeInside(project.root, `${record.sourceRelative}.${crypto.randomBytes(6).toString('hex')}.rollback.tmp`);
+  await fs.writeFile(temp, backupText, { flag: 'wx' });
+  if (schematicAdapter.digest(await fs.readFile(source, 'utf8')) !== record.candidateSha256) { await fs.rm(temp, { force: true }); return result('FAIL', 'Rollback native schematic', 'The native file changed during rollback preparation. No replacement was made.'); }
+  await fs.rename(temp, source);
+  const restored = schematicAdapter.importKiCadSchematic(backupText); restored.name = project.name; await storeSchematicRevision(project.root, restored);
+  record.rolledBack = true; record.rolledBackAt = new Date().toISOString(); record.rollbackBackup = path.relative(project.root, rollbackBackup).replaceAll(path.sep, '/');
+  await fs.writeFile(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  const manifestPath = safeInside(project.root, 'project.json');
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  manifest.native.status = `KiCad schematic restored from verified backup; source SHA-256 ${record.sourceSha256}; prior committed revision backup ${record.rollbackBackup}.`;
+  const manifestTemp = `${manifestPath}.${crypto.randomBytes(5).toString('hex')}.tmp`;
+  await fs.writeFile(manifestTemp, `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' }); await fs.rename(manifestTemp, manifestPath);
+  activeProject = await summarize(project.root); win.webContents.send('project:changed', activeProject);
+  return result('PASS', 'Rollback native schematic', 'The original native schematic was restored and a copy of the committed revision was retained.', { sourceSha256: record.sourceSha256, currentRevisionBackup: rollbackBackup });
+});
 register('native-tools:get', getNativeTools);
 register('theme:get', async () => {
   const prefs = await readPreferences();
@@ -328,10 +625,19 @@ register('native:open', async kind => {
 });
 register('circuit:check', async () => {
   const project = ensureProject();
-  const cli = (await getNativeTools()).kicadCli;
+  const tools = await getNativeTools();
+  const cli = tools.kicadCli;
   if (!cli) return result('NOT TESTED', 'Check Circuit', 'KiCad CLI was not found. Install KiCad 10.0.7 separately.');
+  const latestModel = await latestSchematicRevision(project.root);
+  const sync = await nativeSyncState(project.root, project.files.schematic, latestModel?.model);
+  if (['UNSYNCHRONIZED', 'EXTERNAL_CONFLICT', 'UNSUPPORTED'].includes(sync.status)) return result('NOT TESTED', 'Check Circuit', 'Native ERC/DRC was not presented as verification because DemonX edits are unsynchronized with the native design. Validate & Stage for KiCad, then explicitly commit the candidate first.', { output: `Native schematic SHA-256: ${sync.nativeSha256 || '(unavailable)'}\nEditor revision: ${sync.editorRevision || '(none)'}\nSync state: ${sync.status}\n${sync.reason}` });
   const reportDir = path.join(project.root, 'reports', `check-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}`);
   await fs.mkdir(reportDir, { recursive: true });
+  const fileHashes = {};
+  for (const [kind, file] of [['schematic', project.files.schematic], ['pcb', project.files.pcb]]) {
+    if (!file) { fileHashes[kind] = null; continue; }
+    try { fileHashes[kind] = schematicAdapter.digest(await fs.readFile(file)); } catch { fileHashes[kind] = null; }
+  }
   const reports = [];
   let failed = false, tested = 0;
   for (const [kind, file] of [['ERC', project.files.schematic], ['DRC', project.files.pcb]]) {
@@ -344,13 +650,19 @@ register('circuit:check', async () => {
     let text = runResult.output;
     try { text = `${text}\n${await fs.readFile(report, 'utf8')}`.trim(); } catch {}
     if (runResult.code !== 0) failed = true;
-    reports.push(`${kind} exit ${runResult.code}\n${text}`);
+    reports.push(`${kind} exit ${runResult.code}\nNative schematic SHA-256 ${sync.nativeSha256 || '(not applicable)'}\n${text}`);
   }
   if (!tested) return result('NOT TESTED', 'Check Circuit', 'This project has no native schematic or PCB to check.', { reportPaths: [] });
-  return result(failed ? 'FAIL' : 'PASS', 'Check Circuit', `${tested} native KiCad check(s) executed with ${cli}.`, { output: reports.join('\n\n'), reportPaths: [reportDir] });
+  const revisionRecord = { createdAt: new Date().toISOString(), tool: `KiCad ${tools.kicadVersion || 'unknown'}`, platform: process.platform,
+    status: failed ? 'FAIL' : 'PASS', files: { schematic: { sha256: fileHashes.schematic, editorRevision: latestModel?.revision || null, syncStatus: sync.status }, pcb: { sha256: fileHashes.pcb } } };
+  const revisionReport = path.join(reportDir, 'design-revision.json');
+  await fs.writeFile(revisionReport, `${JSON.stringify(revisionRecord, null, 2)}\n`, { flag: 'wx' });
+  return result(failed ? 'FAIL' : 'PASS', 'Check Circuit', `${tested} native KiCad check(s) executed with ${cli}; reports are tied to the displayed native file SHA-256 values.`, { output: `${JSON.stringify(revisionRecord, null, 2)}\n\n${reports.join('\n\n')}`, reportPaths: [reportDir] });
 });
 register('manufacturing:prepare', async () => {
   const project = ensureProject();
+  const manifest = JSON.parse(await fs.readFile(path.join(project.root, 'project.json'), 'utf8'));
+  if (manifest.manufacturing?.status === 'blocked-mechanical-review') return result('FAIL', 'Fabrication blocked', 'Mechanical review project: no manufacturing files may be generated. Owner measurements and a later design milestone are required.');
   if (!project.files.pcb) return result('NOT TESTED', 'Prepare Manufacturing Files', 'This project has no native PCB file.');
   const cli = (await getNativeTools()).kicadCli;
   if (!cli) return result('NOT TESTED', 'Prepare Manufacturing Files', 'KiCad CLI was not found. Install KiCad 10.0.7 separately.');
@@ -454,9 +766,31 @@ async function createWindow() {
   win.webContents.on('preload-error', (_event, preload, error) => console.error('[Circuit preload error]', preload, error));
   win.webContents.on('did-fail-load', (_event, code, description, url) => console.error('[Circuit load error]', code, description, url));
   win.webContents.on('render-process-gone', (_event, details) => console.error('[Circuit renderer process gone]', details));
+  if (process.env.DEMONX_CIRCUIT_DEV_MODE === '1') {
+    let reloadTimer;
+    const fsSync = require('node:fs');
+    const watchedRoot = new Set(['style.css', 'index.html']);
+    const onChange = (watched, _event, fileName) => {
+      if (!fileName || !watched.has(String(fileName))) return;
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        if (!win || win.isDestroyed()) return;
+        console.info(`[Circuit dev] changed ${String(fileName)}; requesting safe renderer reload`);
+        win.webContents.send('dev:renderer-updated', String(fileName));
+      }, 250);
+    };
+    const sourceWatcher = fsSync.watch(__dirname, onChange.bind(null, watchedRoot));
+    const bundleWatcher = fsSync.watch(path.join(__dirname, 'dist'), onChange.bind(null, new Set(['renderer.js', 'preload.js'])));
+    win.once('closed', () => { sourceWatcher.close(); bundleWatcher.close(); clearTimeout(reloadTimer); });
+  }
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   await win.loadFile(path.join(__dirname, 'index.html'));
+  if (process.env.DEMONX_CIRCUIT_DEV_MODE === '1' && process.env.DEMONX_CIRCUIT_DEV_PROJECT) {
+    activeProject = await summarize(path.resolve(process.env.DEMONX_CIRCUIT_DEV_PROJECT));
+    await rememberProject(activeProject);
+    win.webContents.send('project:changed', activeProject);
+  }
   if (process.argv.includes('--capture-screenshot')) {
     await new Promise(resolve => setTimeout(resolve, 600));
     const image = await win.webContents.capturePage();

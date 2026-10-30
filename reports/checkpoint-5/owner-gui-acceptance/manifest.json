@@ -1,0 +1,264 @@
+{
+  "format": "demonx-circuit-owner-gui-acceptance",
+  "formatVersion": "1.1",
+  "status": "PREPARED; owner GUI acceptance NOT TESTED",
+  "testedSourceCommit": "c6f016acf775802025b92863ec627c15db5db9da",
+  "stageId": "mvp7gnhz-5c3fdf857a",
+  "kicadVersion": "10.0.7",
+  "fixture": "DemonX Circuit LED/resistor round-trip candidate",
+  "sourceEvidence": "Packaged Windows native round-trip acceptance; workflow run 40318330198",
+  "nativeSchematicNames": {
+    "original": "DemonX-Circuit-Project-3.kicad_sch",
+    "candidate": "DemonX-Circuit-Project-3.kicad_sch"
+  },
+  "sourceSchematicSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1",
+  "stagedCandidateSha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7",
+  "nativeValidation": {
+    "originalNetGroups": [
+      [
+        "D1.1",
+        "R1.2"
+      ],
+      [
+        "D1.2",
+        "J1.2"
+      ],
+      [
+        "J1.1",
+        "R1.1"
+      ]
+    ],
+    "ownerGraphicalOpen": "NOT TESTED",
+    "candidateErcExitCode": 0,
+    "hostedGraphicalOpen": "BLOCKED: hosted Windows runner has no OpenGL 2.1 support",
+    "candidateNetGroups": [
+      [
+        "D1.1",
+        "R1.1"
+      ],
+      [
+        "D1.2",
+        "J1.2"
+      ],
+      [
+        "J1.1",
+        "R1.2"
+      ]
+    ],
+    "candidateNetlistMatches": true,
+    "originalNetlistMatches": true
+  },
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 14,
+      "sha256": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 40,
+      "sha256": "d87d8659818f7d51a913bf8fb5341c5baf2fefeeaf82e65e31f8da32aa31a115"
+    },
+    {
+      "path": "candidate/backups/DemonX-Circuit-Project-3.kicad_sch.gui-test-reset",
+      "bytes": 9648,
+      "sha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7"
+    },
+    {
+      "path": "candidate/backups/DemonX-Circuit-Project-3.kicad_sch.initial-candidate",
+      "bytes": 13009,
+      "sha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1"
+    },
+    {
+      "path": "candidate/DemonX-Circuit-Project-3.kicad_pcb",
+      "bytes": 15230,
+      "sha256": "e55a3e32f852f2c8353a076ce8986affefa505a671fc3af1ab53116cd0d13e69"
+    },
+    {
+      "path": "candidate/DemonX-Circuit-Project-3.kicad_pro",
+      "bytes": 91,
+      "sha256": "058e137b5786792f5e7b529b2d0fd621248211f91b8aa5d3605846b4dd02f831"
+    },
+    {
+      "path": "candidate/DemonX-Circuit-Project-3.kicad_sch",
+      "bytes": 9648,
+      "sha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7"
+    },
+    {
+      "path": "candidate/fp-lib-table",
+      "bytes": 25379,
+      "sha256": "99bfa18b35f17e25e128d92a833498a6ee0d446600be97f67f017d03a841338c"
+    },
+    {
+      "path": "candidate/project.json",
+      "bytes": 1261,
+      "sha256": "0aef1881291ab709e3a8f3817e1ea347ad8d2ad9e75da0b2019db7983ba666db"
+    },
+    {
+      "path": "candidate/reports/candidate-erc.rpt",
+      "bytes": 357,
+      "sha256": "629060e8c9fe531688e6f282cbf0b54c1fce886a93c387b4897f68f728dff787"
+    },
+    {
+      "path": "candidate/reports/candidate.net",
+      "bytes": 6501,
+      "sha256": "102b610ae45a2c1f8d9d9743884488819be79c82f94b351aec185c8a4ff5a3b5"
+    },
+    {
+      "path": "candidate/reports/original.net",
+      "bytes": 6573,
+      "sha256": "f0932eda75328dbf541ace6fec3375ebe265bc9801ada0959e434a4072d91f21"
+    },
+    {
+      "path": "candidate/reports/validation.json",
+      "bytes": 2978,
+      "sha256": "06fd64e983064160eabfe07fdfc8b47baf9a7022f22f3388317084411f3f092e"
+    },
+    {
+      "path": "candidate/sym-lib-table",
+      "bytes": 34063,
+      "sha256": "67d2a4c14bc1361adf87b169b9b11bbb87db1fcc74eceac22aa08d3386d8487f"
+    },
+    {
+      "path": "original/DemonX-Circuit-Project-3.kicad_pcb",
+      "bytes": 15230,
+      "sha256": "e55a3e32f852f2c8353a076ce8986affefa505a671fc3af1ab53116cd0d13e69"
+    },
+    {
+      "path": "original/DemonX-Circuit-Project-3.kicad_pro",
+      "bytes": 91,
+      "sha256": "058e137b5786792f5e7b529b2d0fd621248211f91b8aa5d3605846b4dd02f831"
+    },
+    {
+      "path": "original/DemonX-Circuit-Project-3.kicad_sch",
+      "bytes": 13009,
+      "sha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1"
+    },
+    {
+      "path": "original/fp-lib-table",
+      "bytes": 25379,
+      "sha256": "99bfa18b35f17e25e128d92a833498a6ee0d446600be97f67f017d03a841338c"
+    },
+    {
+      "path": "original/project.json",
+      "bytes": 1215,
+      "sha256": "27276deea4ee05f6a3767f4012b301a3f755c49940e3e360a642d424b8290b2c"
+    },
+    {
+      "path": "original/reports/original.net",
+      "bytes": 6573,
+      "sha256": "f0932eda75328dbf541ace6fec3375ebe265bc9801ada0959e434a4072d91f21"
+    },
+    {
+      "path": "original/sym-lib-table",
+      "bytes": 34063,
+      "sha256": "67d2a4c14bc1361adf87b169b9b11bbb87db1fcc74eceac22aa08d3386d8487f"
+    },
+    {
+      "path": "OWNER-CHECKLIST.md",
+      "bytes": 5150,
+      "sha256": "0b9639e483358d52f2e3db94659595e4c7cd9ef8246bf79e4374659b3940fda5"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2149,
+      "sha256": "8e56067f30794dc9f7cff0fdb4903ec0bbe1cbe739773e01d869ceb281e04bf4"
+    },
+    {
+      "path": "roundtrip-evidence.json",
+      "bytes": 1945,
+      "sha256": "49a1e3df4dd65de68628439b78e35116e36c32225bb509e63553e09ba897e563"
+    },
+    {
+      "path": "verify-after-save.ps1",
+      "bytes": 4401,
+      "sha256": "9b3b59dbd22f0053744d11907b9ee79bfe136ccc4e3e688439b6d65b6449be26"
+    },
+    {
+      "path": "verify-package.ps1",
+      "bytes": 1496,
+      "sha256": "229ef379ea0520f399ce54b2fef819d465e234534c0776641d5c9b887bf8f547"
+    },
+    {
+      "path": "write-manifest.ps1",
+      "bytes": 5843,
+      "sha256": "a839b35ccaf895d6093746418bac7ecd209ee78e4d20e7013bbe1ca42cb0a00f"
+    }
+  ],
+  "expectedComponents": [
+    {
+      "originalValue": "RED LED",
+      "reference": "D1",
+      "candidateValue": "RED LED"
+    },
+    {
+      "originalValue": "5V INPUT",
+      "reference": "J1",
+      "candidateValue": "5V INPUT"
+    },
+    {
+      "ownerReversibleTestValue": "510",
+      "candidateRotation": 90,
+      "candidateValue": "470",
+      "candidatePositionMm": [
+        52,
+        42
+      ],
+      "originalRotation": 0,
+      "reference": "R1",
+      "originalValue": "330",
+      "originalPositionMm": [
+        50,
+        40
+      ]
+    }
+  ],
+  "expectedConnectivity": [
+    {
+      "original": true,
+      "stagedCandidate": false,
+      "pins": [
+        "D1.1",
+        "R1.2"
+      ]
+    },
+    {
+      "original": false,
+      "stagedCandidate": true,
+      "pins": [
+        "D1.1",
+        "R1.1"
+      ]
+    },
+    {
+      "original": true,
+      "stagedCandidate": true,
+      "pins": [
+        "D1.2",
+        "J1.2"
+      ]
+    },
+    {
+      "original": true,
+      "stagedCandidate": false,
+      "pins": [
+        "J1.1",
+        "R1.1"
+      ]
+    },
+    {
+      "original": false,
+      "stagedCandidate": true,
+      "pins": [
+        "J1.1",
+        "R1.2"
+      ]
+    }
+  ],
+  "observedNativeComparison": "The accepted candidate is a meaningful topology change: it exchanges R1.1 and R1.2 between D1.1 and J1.1. Original and candidate KiCad native netlists independently match their expected pin groups; candidate ERC exited 0.",
+  "expectedOwnerRun": "Open candidate in KiCad GUI, change R1 470 to 510, save and reopen; then verify distinct original/candidate pin groups and candidate ERC exit 0.",
+  "ciPreApprovalBackupSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1",
+  "preparedCandidateResetSha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7",
+  "filesHashAlgorithm": "SHA-256",
+  "filesHashLineEndings": "CRLF normalized to LF; inventory matches Git-stored/downloaded package content"
+}

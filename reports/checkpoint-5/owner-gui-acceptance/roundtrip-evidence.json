@@ -1,0 +1,100 @@
+{
+  "status": "PREPARED; owner graphical acceptance NOT TESTED",
+  "sourceCommit": "c6f016acf775802025b92863ec627c15db5db9da",
+  "kicadVersion": "KiCad CLI 10.0.7",
+  "sourceSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1",
+  "candidateSha256": "9c58f70b6dbb256452a30b81e9e7642f9a0a55f0846fdc4ad0d076070d37d5a7",
+  "sourceRevision": "0.1.0",
+  "stageId": "mvp7gnhz-5c3fdf857a",
+  "validation": {
+    "originalNetlist": {
+      "matches": true,
+      "expected": [
+        "D1.1|R1.2",
+        "D1.2|J1.2",
+        "J1.1|R1.1"
+      ],
+      "actual": [
+        "D1.1|R1.2",
+        "D1.2|J1.2",
+        "J1.1|R1.1"
+      ],
+      "missing": [],
+      "unexpected": []
+    },
+    "candidateNetlist": {
+      "matches": true,
+      "expected": [
+        "D1.1|R1.1",
+        "D1.2|J1.2",
+        "J1.1|R1.2"
+      ],
+      "actual": [
+        "D1.1|R1.1",
+        "D1.2|J1.2",
+        "J1.1|R1.2"
+      ],
+      "missing": [],
+      "unexpected": []
+    },
+    "erc": {
+      "exitCode": 0
+    }
+  },
+  "expectedComponents": [
+    {
+      "reference": "D1",
+      "originalValue": "RED LED",
+      "candidateValue": "RED LED"
+    },
+    {
+      "reference": "J1",
+      "originalValue": "5V INPUT",
+      "candidateValue": "5V INPUT"
+    },
+    {
+      "reference": "R1",
+      "originalValue": "330",
+      "candidateValue": "470",
+      "originalPositionMm": [
+        50,
+        40
+      ],
+      "candidatePositionMm": [
+        52,
+        42
+      ],
+      "originalRotation": 0,
+      "candidateRotation": 90
+    }
+  ],
+  "originalConnectivity": [
+    [
+      "D1.1",
+      "R1.2"
+    ],
+    [
+      "D1.2",
+      "J1.2"
+    ],
+    [
+      "J1.1",
+      "R1.1"
+    ]
+  ],
+  "candidateConnectivity": [
+    [
+      "D1.1",
+      "R1.1"
+    ],
+    [
+      "D1.2",
+      "J1.2"
+    ],
+    [
+      "J1.1",
+      "R1.2"
+    ]
+  ],
+  "backupSha256": "b3c611bff34261a99b3f7dafe0c12ec8b66939e76567ae375333fa0665b7fdf1"
+}

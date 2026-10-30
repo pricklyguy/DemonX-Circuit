@@ -1,0 +1,79 @@
+{
+  "status": "PASS",
+  "tool": "KiCad CLI 10.0.7",
+  "platform": "win32",
+  "commands": [
+    {
+      "argv": [
+        "sch",
+        "export",
+        "netlist",
+        "--format",
+        "kicadxml",
+        "--output",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\reports\\schematic-roundtrip\\mvp7gnhz-5c3fdf857a\\original.net",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\DemonX-Circuit-Project-3.kicad_sch"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "sch",
+        "export",
+        "netlist",
+        "--format",
+        "kicadxml",
+        "--output",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\reports\\schematic-roundtrip\\mvp7gnhz-5c3fdf857a\\candidate.net",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\reports\\schematic-roundtrip\\mvp7gnhz-5c3fdf857a\\candidate.kicad_sch"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "sch",
+        "erc",
+        "--severity-all",
+        "--exit-code-violations",
+        "--output",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\reports\\schematic-roundtrip\\mvp7gnhz-5c3fdf857a\\candidate-erc.rpt",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\demonx-circuit-acceptance-zNl9pq\\DemonX Circuit Projects\\DemonX-Circuit-Project-3\\reports\\schematic-roundtrip\\mvp7gnhz-5c3fdf857a\\candidate.kicad_sch"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "originalNetlist": {
+    "matches": true,
+    "expected": [
+      "D1.1|R1.2",
+      "D1.2|J1.2",
+      "J1.1|R1.1"
+    ],
+    "actual": [
+      "D1.1|R1.2",
+      "D1.2|J1.2",
+      "J1.1|R1.1"
+    ],
+    "missing": [],
+    "unexpected": []
+  },
+  "candidateNetlist": {
+    "matches": true,
+    "expected": [
+      "D1.1|R1.1",
+      "D1.2|J1.2",
+      "J1.1|R1.2"
+    ],
+    "actual": [
+      "D1.1|R1.1",
+      "D1.2|J1.2",
+      "J1.1|R1.2"
+    ],
+    "missing": [],
+    "unexpected": []
+  },
+  "erc": {
+    "exitCode": 0,
+    "output": "Found 0 violations\r\nSaved ERC Report to C:/Users/RUNNER~1/AppData/Local/Temp/demonx-circuit-acceptance-zNl9pq/DemonX Circuit Projects/DemonX-Circuit-Project-3/reports/schematic-roundtrip/mvp7gnhz-5c3fdf857a/candidate-erc.rpt\nERC report (2026-10-26T12:00:59, Encoding UTF8)\r\nReport includes: Errors, Warnings, Exclusions\r\n\r\n***** Sheet /\r\n\r\n ** ERC messages: 0  Errors 0  Warnings 0\r\n\r\n ** Ignored checks:\r\n    - Global label only appears once in the schematic\r\n    - Four connection points are joined together\r\n    - SPICE model issue\r\n    - Assigned footprint doesn't match footprint filters"
+  }
+}

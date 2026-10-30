@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/demonx-circuit-foundation
+      - codex/demonx-circuit-schematic-editor
     paths:
       - ".github/workflows/kicad-native-smoke.yml"
       - "prototype/native-smoke/**"
