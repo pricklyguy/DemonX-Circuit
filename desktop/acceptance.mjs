@@ -385,11 +385,11 @@ try {
     await click('schematic-rotate');
     const prePlacementPreview = await evaluate(`(async()=>({mode:document.getElementById('schematic-add').classList.contains('active'),modelCount:(await window.circuit.loadSchematicModel()).components.length,status:document.getElementById('schematic-status').textContent}))()`);
     check('Rotate turns the ghosted resistor before placement', prePlacementPreview.mode && prePlacementPreview.modelCount === 3 && /90°/.test(prePlacementPreview.status), JSON.stringify(prePlacementPreview));
-    const resistorDrop = await modelCanvasPoint(65, 50); await clickCanvasAt(resistorDrop.x, resistorDrop.y);
+    const resistorDrop = await modelCanvasPoint(65, 35); await clickCanvasAt(resistorDrop.x, resistorDrop.y);
     editorModel = await evaluate('window.circuit.loadSchematicModel()');
     check('single canvas click places a rotated resistor on supported grid', editorModel?.components?.length === 4 && editorModel.components.some(c => c.reference === 'R2' && c.libId === 'Device:R' && c.rotation === 90 && Number.isInteger(c.x) && Number.isInteger(c.y)), JSON.stringify(editorModel?.components?.map(c => [c.reference, c.rotation, c.x, c.y])));
     const afterPlace = await evaluate('window.circuit.loadSchematicModel()');
-    const secondClick = await modelCanvasPoint(66, 50); await clickCanvasAt(secondClick.x, secondClick.y);
+    const secondClick = await modelCanvasPoint(66, 35); await clickCanvasAt(secondClick.x, secondClick.y);
     check('placement exits after one click and cannot create accidental duplicates', (await evaluate('window.circuit.loadSchematicModel()')).components.length === afterPlace.components.length, JSON.stringify((await evaluate('window.circuit.loadSchematicModel()')).components.map(c => c.reference)));
     await click('schematic-undo');
     check('undo restores the prior component list', (await evaluate('window.circuit.loadSchematicModel()')).components.length === 3, 'Component placement undone.');
