@@ -479,9 +479,12 @@ try {
       const j1Id = wiredModel?.components?.find(c => c.reference === 'J1')?.id;
       const j2Id = wiredModel?.components?.find(c => c.reference === 'J2')?.id;
       check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j1Id}:1`) && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j2Id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
-      const selectedWirePoint = await wireBetweenCanvasPoint('J1', '1', 'R1', '1'); await clickCanvasAt(selectedWirePoint.x, selectedWirePoint.y);
+      // This known point lies on the visible J1.1–R1.1 route at the reset
+      // view used by the fixture. The routed model midpoint can fall between
+      // orthogonal segments and is not necessarily a point on the drawn wire.
+      await clickCanvasAt(325.5, 293.625);
       const netInfo = await evaluate(`document.getElementById('schematic-net-info').textContent`);
-      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /R1\.1/.test(netInfo), netInfo);
+      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /R1\.1/.test(netInfo) && /J2\.1/.test(netInfo), netInfo);
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
 
     await click('schematic-save');
@@ -604,7 +607,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 public static class DemonXCircuitWindowMessages {
   private delegate bool EnumChildCallback(IntPtr hWnd, IntPtr lParam);
+  private delegate bool EnumWindowCallback(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowCallback callback, IntPtr lParam);
   [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildCallback callback, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
   [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
   public static string Text(IntPtr hWnd) { StringBuilder text = new StringBuilder(512); GetWindowText(hWnd, text, text.Capacity); return text.ToString(); }
@@ -612,6 +619,15 @@ public static class DemonXCircuitWindowMessages {
     List<string> values = new List<string>();
     EnumChildCallback callback = delegate(IntPtr child, IntPtr ignored) { string text = Text(child); if (!String.IsNullOrWhiteSpace(text)) values.Add(text); return true; };
     EnumChildWindows(parent, callback, IntPtr.Zero); return values.ToArray();
+  }
+  public static IntPtr[] VisibleTopLevelWindows(uint processId) {
+    List<IntPtr> values = new List<IntPtr>();
+    EnumWindowCallback callback = delegate(IntPtr hWnd, IntPtr ignored) {
+      uint ownerProcessId; GetWindowThreadProcessId(hWnd, out ownerProcessId);
+      if (ownerProcessId == processId && IsWindowVisible(hWnd)) values.Add(hWnd);
+      return true;
+    };
+    EnumWindows(callback, IntPtr.Zero); return values.ToArray();
   }
   public static bool ClickChildByCaption(IntPtr parent, string caption) {
     IntPtr target = IntPtr.Zero;
@@ -632,7 +648,12 @@ $fallbackDialogAction = 'not encountered'
 $fallbackDialogAttempted = $false
 $windows = @()
 do {
-  $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' } | Select-Object ProcessName,Id,MainWindowHandle,MainWindowTitle)
+  $processes = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'kicad|eeschema' })
+  $windows = @(foreach ($process in $processes) {
+    foreach ($handle in [DemonXCircuitWindowMessages]::VisibleTopLevelWindows([uint]$process.Id)) {
+      [pscustomobject]@{ ProcessName = $process.ProcessName; Id = $process.Id; MainWindowHandle = [long]$handle; MainWindowTitle = [DemonXCircuitWindowMessages]::Text($handle) }
+    }
+  })
   if (@($windows | Where-Object { $_.MainWindowTitle -match 'candidate' }).Count -gt 0) { break }
   $info = $windows | Where-Object { $_.MainWindowTitle -eq 'Information' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
   if ($info -and -not $fallbackDialogAttempted) {
