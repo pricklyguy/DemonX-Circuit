@@ -479,12 +479,10 @@ try {
       const j1Id = wiredModel?.components?.find(c => c.reference === 'J1')?.id;
       const j2Id = wiredModel?.components?.find(c => c.reference === 'J2')?.id;
       check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j1Id}:1`) && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j2Id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
-      // This known point lies on the visible J1.1–R1.1 route at the reset
-      // view used by the fixture. The routed model midpoint can fall between
-      // orthogonal segments and is not necessarily a point on the drawn wire.
-      await clickCanvasAt(325.5, 293.625);
-      const netInfo = await evaluate(`document.getElementById('schematic-net-info').textContent`);
-      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /R1\.1/.test(netInfo) && /J2\.1/.test(netInfo), netInfo);
+      await click('schematic-select');
+      const selectedPinPoint = await pinCanvasPoint('J1', '1');
+      const selectedPinState = await clickCanvasAt(selectedPinPoint.x, selectedPinPoint.y);
+      check('clicking a pin highlights and lists all pins in the semantic net', /J1\.1/.test(selectedPinState.netInfo) && /R1\.1/.test(selectedPinState.netInfo) && /J2\.1/.test(selectedPinState.netInfo), selectedPinState.netInfo);
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
 
     await click('schematic-save');
