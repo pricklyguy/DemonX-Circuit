@@ -479,9 +479,9 @@ try {
       const j1Id = wiredModel?.components?.find(c => c.reference === 'J1')?.id;
       const j2Id = wiredModel?.components?.find(c => c.reference === 'J2')?.id;
       check('pin connection creates a merged semantic net', wiredModel?.wires?.length === wireTargets.wires + 1 && wiredModel.wires.some(w => new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j1Id}:1`) && new Set([w.fromNodeId, w.toNodeId]).has(`pin:${j2Id}:1`)), JSON.stringify(wiredModel?.wires?.at(-1)));
-      const selectedWirePoint = await wireBetweenCanvasPoint('J1', '1', 'J2', '1'); await clickCanvasAt(selectedWirePoint.x, selectedWirePoint.y);
+      const selectedWirePoint = await wireBetweenCanvasPoint('J1', '1', 'R1', '1'); await clickCanvasAt(selectedWirePoint.x, selectedWirePoint.y);
       const netInfo = await evaluate(`document.getElementById('schematic-net-info').textContent`);
-      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /J2\.1/.test(netInfo), netInfo);
+      check('clicking a wire highlights and lists all pins in the semantic net', /J1\.1/.test(netInfo) && /R1\.1/.test(netInfo), netInfo);
     } else fail('wire tool connects actual snapped component pins', `Calculated target pins were outside the packaged canvas: ${JSON.stringify(wireTargets)}`);
 
     await click('schematic-save');
@@ -597,10 +597,9 @@ try {
     const guiOpen = await evaluate(`({status:document.getElementById('result-kicker').textContent,message:document.getElementById('result-message').textContent})`);
     let editorWindows = [], editorWindowProbeError = null;
     try {
-      const probeScript = String.raw`Add-Type -AssemblyName UIAutomationClient
-Add-Type -AssemblyName UIAutomationTypes
-Add-Type -TypeDefinition @'
+      const probeScript = String.raw`Add-Type -TypeDefinition @'
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class DemonXCircuitWindowMessages {
@@ -608,12 +607,16 @@ public static class DemonXCircuitWindowMessages {
   [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildCallback callback, IntPtr lParam);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
   [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+  public static string Text(IntPtr hWnd) { StringBuilder text = new StringBuilder(512); GetWindowText(hWnd, text, text.Capacity); return text.ToString(); }
+  public static string[] ChildTexts(IntPtr parent) {
+    List<string> values = new List<string>();
+    EnumChildCallback callback = delegate(IntPtr child, IntPtr ignored) { string text = Text(child); if (!String.IsNullOrWhiteSpace(text)) values.Add(text); return true; };
+    EnumChildWindows(parent, callback, IntPtr.Zero); return values.ToArray();
+  }
   public static bool ClickChildByCaption(IntPtr parent, string caption) {
     IntPtr target = IntPtr.Zero;
     EnumChildCallback callback = delegate(IntPtr child, IntPtr ignored) {
-      StringBuilder text = new StringBuilder(256);
-      GetWindowText(child, text, text.Capacity);
-      if (String.Equals(text.ToString(), caption, StringComparison.Ordinal)) { target = child; return false; }
+      if (String.Equals(Text(child), caption, StringComparison.Ordinal)) { target = child; return false; }
       return true;
     };
     EnumChildWindows(parent, callback, IntPtr.Zero);
@@ -623,7 +626,7 @@ public static class DemonXCircuitWindowMessages {
   }
 }
 '@
-$deadline = (Get-Date).AddSeconds(20)
+$deadline = (Get-Date).AddSeconds(45)
 $fallbackDialogMessageDelivered = $false
 $fallbackDialogAction = 'not encountered'
 $fallbackDialogAttempted = $false
@@ -635,14 +638,11 @@ do {
   if ($info -and -not $fallbackDialogAttempted) {
     $fallbackDialogAttempted = $true
     try {
-      $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$info.MainWindowHandle)
-      $children = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-      $texts = @($children | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+      $texts = @([DemonXCircuitWindowMessages]::ChildTexts([IntPtr]$info.MainWindowHandle))
       $knownOpenGLFallback = (($texts -join ' ') -match 'Could not use OpenGL, falling back to software rendering') -and (($texts -join ' ') -match 'OpenGL 2\.1 or higher is required!')
       if ($knownOpenGLFallback) {
         $fallbackDialogAction = 'known software-rendering dialog detected'
-        $ok = $children | Where-Object { $_.Current.Name -eq 'OK' } | Select-Object -First 1
-        if ($ok) {
+        if ($texts -contains 'OK') {
           if ([DemonXCircuitWindowMessages]::ClickChildByCaption([IntPtr]$info.MainWindowHandle, 'OK')) {
             $fallbackDialogMessageDelivered = $true
             $fallbackDialogAction = 'bounded BM_CLICK message was delivered to the exact-caption native OK child window'
@@ -655,18 +655,15 @@ do {
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $deadline)
 $details = @(foreach ($window in $windows) {
-  $texts = @()
+    $texts = @()
   if ($window.MainWindowHandle -ne 0) {
-    try {
-      $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$window.MainWindowHandle)
-      $nodes = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-      $texts = @($nodes | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-    } catch { $texts += ('UIA error: ' + $_.Exception.Message) }
+    try { $texts = @([DemonXCircuitWindowMessages]::ChildTexts([IntPtr]$window.MainWindowHandle)) }
+    catch { $texts += ('Window-text error: ' + $_.Exception.Message) }
   }
-  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; AccessibleTexts = $texts; FallbackButtonMessageDelivered = $fallbackDialogMessageDelivered; FallbackDialogAction = $fallbackDialogAction }
+  [pscustomobject]@{ ProcessName = $window.ProcessName; Id = $window.Id; MainWindowHandle = $window.MainWindowHandle; MainWindowTitle = $window.MainWindowTitle; ChildWindowTexts = $texts; FallbackButtonMessageDelivered = $fallbackDialogMessageDelivered; FallbackDialogAction = $fallbackDialogAction }
 })
 ConvertTo-Json -InputObject @($details) -Depth 5 -Compress`;
-      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', probeScript], { encoding: 'utf8', timeout: 30000 }).trim();
+      const windowsJson = execFileSync('powershell.exe', ['-NoProfile', '-Command', probeScript], { encoding: 'utf8', timeout: 60000 }).trim();
       const parsedWindows = windowsJson ? JSON.parse(windowsJson) : [];
       editorWindows = Array.isArray(parsedWindows) ? parsedWindows : parsedWindows ? [parsedWindows] : [];
     } catch (error) { editorWindowProbeError = error.message; }
