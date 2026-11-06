@@ -1,6 +1,6 @@
 # Prototype plan and checkpoint evidence
 
-Checkpoint 1 approval is recorded. Work is isolated on `codex/demonx-circuit-foundation`; no other DemonX repository was changed, no host toolchain was installed, and no merge to `main` was performed.
+The repository now uses `main` for the reviewed stable baseline and `dev` for ongoing Circuit development. Historical `codex/*` branches and pre-consolidation backup references are retained until owner approval for removal. No other DemonX repository was changed.
 
 ## Checkpoint 3 status summary (2026-10-24)
 

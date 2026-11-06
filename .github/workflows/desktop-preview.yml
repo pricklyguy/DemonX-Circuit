@@ -2,7 +2,7 @@ name: DemonX Circuit Windows development preview
 
 on:
   push:
-    branches: [codex/demonx-circuit-foundation, codex/demonx-circuit-schematic-editor]
+    branches: [main, dev, codex/integration-main-dev]
     paths:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
@@ -16,6 +16,8 @@ on:
       - "prototype/**"
       - "examples/native-smoke/led-resistor.dxcircuit.json"
       - "examples/esp32-sensor/**"
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

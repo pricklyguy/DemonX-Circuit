@@ -29,16 +29,17 @@
 - Integrate with Forge and CNC through documented, versioned handoff data. Preserve units, origin, orientation, and source revisions.
 - Never merge automatically to `main`; avoid unrelated refactoring.
 
-## Git push authorization and branch safety
+## Git branch and push policy
 
-The repository owner grants standing project-level approval for routine, non-force pushes of reviewed, committed DemonX Circuit development work to the authorized repository `https://github.com/pricklyguy/DemonX-Circuit.git`, on approved development branches named `codex/*`. This allows ordinary commit-and-push cycles and hosted CI validation without requesting a new owner decision for each commit, **subject to the execution environment's separate permissions and approval requirements**. This policy does not override tool, credential, sandbox, or platform security controls.
+The standard branches are `main` (stable, reviewed baseline) and `dev` (ongoing development). The owner authorizes routine, non-force pushes of reviewed, committed Circuit development work to `dev` on `https://github.com/pricklyguy/DemonX-Circuit.git`, subject to environment permissions and tool approval. Changes reach `main` through reviewed pull requests with successful required CI. Do not push directly to `main` except for an explicitly owner-authorized repository transition or repair.
 
-- Before any push, verify `origin` resolves to exactly the authorized repository, confirm the local and destination branches, and inspect the commits and changed-file list.
-- Use only normal fast-forward pushes to the matching approved development branch. If the remote has advanced or histories diverge, stop and reconcile safely; never force-push or rewrite published history.
-- Never push to `main`, `master`, release/protected branches, another repository, or an unapproved remote. Do not create pull requests, merge, rebase published history, delete branches/tags, or change repository settings without separate owner approval.
+- Before any push, verify `origin` resolves to exactly the authorized repository, confirm local and destination branches, and inspect commits and changed files.
+- Use normal fast-forward pushes only. If the remote has advanced or histories diverged, stop and reconcile safely; never force-push or rewrite published history.
+- Do not merge pull requests, delete branches/tags/backups, or change repository settings without explicit owner authorization.
+- Keep historical branches and backup refs until the owner approves their removal.
 - Stage only intended source and documentation changes. Exclude secrets, credentials, private data, proprietary board fixtures, generated evidence, build outputs, and unrelated or untracked files unless specifically authorized.
 - Keep other DemonX repositories untouched. No unattended releases, publishing, deployments, signing-service purchases, or other external changes.
-- Record the pushed commit SHA, branch, remote, and CI result. A passing CI job does not imply owner acceptance or authorize merging.
+- Record pushed commit SHAs, branches, remote, and CI results. Passing CI does not imply owner acceptance.
 - If an active security review or tool requires explicit approval for a particular push, request that approval rather than attempting another transport or workaround.
 
 ## Development workflow
