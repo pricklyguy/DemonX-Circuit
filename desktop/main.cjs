@@ -44,6 +44,16 @@ const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(__dirname, '..');
 let activeProject = null;
 let win;
+let activationPending = false;
+const circuitSingleInstanceLock = app.requestSingleInstanceLock();
+function focusCircuitWindow() {
+  if (!win || win.isDestroyed()) { activationPending = true; return; }
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+  activationPending = false;
+}
+if (circuitSingleInstanceLock) app.on('second-instance', focusCircuitWindow);
 const pendingYamlReplacements = new Map();
 const preferencesFile = path.join(app.getPath('userData'), 'preferences.json');
 const SUPPORTED_KICAD_VERSION = '10.0.7';
@@ -791,6 +801,7 @@ async function createWindow() {
     await rememberProject(activeProject);
     win.webContents.send('project:changed', activeProject);
   }
+  if (activationPending) focusCircuitWindow();
   if (process.argv.includes('--capture-screenshot')) {
     await new Promise(resolve => setTimeout(resolve, 600));
     const image = await win.webContents.capturePage();
@@ -801,5 +812,9 @@ async function createWindow() {
     app.quit();
   }
 }
-app.whenReady().then(createWindow).catch(error => { console.error('[Circuit main] window startup failed', error); app.exit(1); });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+if (circuitSingleInstanceLock) {
+  app.whenReady().then(createWindow).catch(error => { console.error('[Circuit main] window startup failed', error); app.exit(1); });
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+} else {
+  app.quit();
+}
