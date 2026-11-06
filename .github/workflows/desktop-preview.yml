@@ -2,7 +2,7 @@ name: DemonX Circuit Windows development preview
 
 on:
   push:
-    branches: [main, dev, codex/integration-main-dev]
+    branches: [main, dev]
     paths:
       - ".github/workflows/desktop-preview.yml"
       - "desktop/**"
